@@ -7,6 +7,7 @@ import {
   Modal,
   FlatList,
   Alert,
+  ScrollView,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
@@ -622,36 +623,44 @@ function ActionSheet({
     }
   }, [visible, selectedPlayer]);
 
+  const renderPlayerGrid = (
+    playerList: Player[],
+    selected: Player | null,
+    onSelect: (p: Player) => void
+  ) => (
+    <View style={sheetStyles.playerGrid}>
+      {playerList.map((item) => (
+        <Pressable
+          key={item.id}
+          style={[
+            sheetStyles.playerOption,
+            selected?.id === item.id && sheetStyles.playerOptionSelected,
+          ]}
+          onPress={() => {
+            Haptics.selectionAsync();
+            onSelect(item);
+          }}
+        >
+          <ThemedText type="body" style={sheetStyles.playerOptionText}>
+            {getPlayerDisplayName(item)}
+          </ThemedText>
+          <ThemedText type="caption" numberOfLines={1} style={{ color: AppColors.textSecondary }}>
+            {item.name}
+          </ThemedText>
+        </Pressable>
+      ))}
+    </View>
+  );
+
   const renderContent = () => {
     if (action === "goal_for") {
       if (step === 0) {
         return (
-          <View style={sheetStyles.content}>
+          <ScrollView style={sheetStyles.scrollContent} showsVerticalScrollIndicator={false}>
             <ThemedText type="h4" style={sheetStyles.title}>
               Who scored?
             </ThemedText>
-            <FlatList
-              data={players}
-              keyExtractor={(item) => item.id}
-              numColumns={3}
-              renderItem={({ item }) => (
-                <Pressable
-                  style={({ pressed }) => [
-                    sheetStyles.playerOption,
-                    scorer?.id === item.id && sheetStyles.playerOptionSelected,
-                    { opacity: pressed ? 0.8 : 1 },
-                  ]}
-                  onPress={() => setScorer(item)}
-                >
-                  <ThemedText type="body" style={sheetStyles.playerOptionText}>
-                    {getPlayerDisplayName(item)}
-                  </ThemedText>
-                  <ThemedText type="caption" numberOfLines={1}>
-                    {item.name}
-                  </ThemedText>
-                </Pressable>
-              )}
-            />
+            {renderPlayerGrid(players, scorer, setScorer)}
             <Pressable
               style={[
                 sheetStyles.confirmButton,
@@ -664,7 +673,7 @@ function ActionSheet({
                 Next
               </ThemedText>
             </Pressable>
-          </View>
+          </ScrollView>
         );
       } else {
         return (
@@ -680,7 +689,10 @@ function ActionSheet({
                     sheetStyles.typeOption,
                     goalType === type && sheetStyles.typeOptionSelected,
                   ]}
-                  onPress={() => setGoalType(type)}
+                  onPress={() => {
+                    Haptics.selectionAsync();
+                    setGoalType(type);
+                  }}
                 >
                   <ThemedText
                     type="small"
@@ -721,7 +733,10 @@ function ActionSheet({
                   sheetStyles.typeOption,
                   goalType === type && sheetStyles.typeOptionSelected,
                 ]}
-                onPress={() => setGoalType(type)}
+                onPress={() => {
+                  Haptics.selectionAsync();
+                  setGoalType(type);
+                }}
               >
                 <ThemedText
                   type="small"
@@ -750,32 +765,11 @@ function ActionSheet({
     if (action === "card") {
       if (step === 0) {
         return (
-          <View style={sheetStyles.content}>
+          <ScrollView style={sheetStyles.scrollContent} showsVerticalScrollIndicator={false}>
             <ThemedText type="h4" style={sheetStyles.title}>
               Who received the card?
             </ThemedText>
-            <FlatList
-              data={players}
-              keyExtractor={(item) => item.id}
-              numColumns={3}
-              renderItem={({ item }) => (
-                <Pressable
-                  style={({ pressed }) => [
-                    sheetStyles.playerOption,
-                    scorer?.id === item.id && sheetStyles.playerOptionSelected,
-                    { opacity: pressed ? 0.8 : 1 },
-                  ]}
-                  onPress={() => setScorer(item)}
-                >
-                  <ThemedText type="body" style={sheetStyles.playerOptionText}>
-                    {getPlayerDisplayName(item)}
-                  </ThemedText>
-                  <ThemedText type="caption" numberOfLines={1}>
-                    {item.name}
-                  </ThemedText>
-                </Pressable>
-              )}
-            />
+            {renderPlayerGrid(players, scorer, setScorer)}
             <Pressable
               style={[
                 sheetStyles.confirmButton,
@@ -788,7 +782,7 @@ function ActionSheet({
                 Next
               </ThemedText>
             </Pressable>
-          </View>
+          </ScrollView>
         );
       } else {
         return (
@@ -803,7 +797,10 @@ function ActionSheet({
                   { backgroundColor: AppColors.warningYellow },
                   cardType === "yellow" && sheetStyles.cardOptionSelected,
                 ]}
-                onPress={() => setCardType("yellow")}
+                onPress={() => {
+                  Haptics.selectionAsync();
+                  setCardType("yellow");
+                }}
               >
                 <ThemedText type="button" style={{ color: "#000" }}>
                   Yellow
@@ -815,7 +812,10 @@ function ActionSheet({
                   { backgroundColor: AppColors.redCard },
                   cardType === "red" && sheetStyles.cardOptionSelected,
                 ]}
-                onPress={() => setCardType("red")}
+                onPress={() => {
+                  Haptics.selectionAsync();
+                  setCardType("red");
+                }}
               >
                 <ThemedText type="button" style={{ color: "#FFF" }}>
                   Red
@@ -838,32 +838,11 @@ function ActionSheet({
     if (action === "sub") {
       if (step === 0) {
         return (
-          <View style={sheetStyles.content}>
+          <ScrollView style={sheetStyles.scrollContent} showsVerticalScrollIndicator={false}>
             <ThemedText type="h4" style={sheetStyles.title}>
               Player coming off
             </ThemedText>
-            <FlatList
-              data={players}
-              keyExtractor={(item) => item.id}
-              numColumns={3}
-              renderItem={({ item }) => (
-                <Pressable
-                  style={({ pressed }) => [
-                    sheetStyles.playerOption,
-                    playerOff?.id === item.id && sheetStyles.playerOptionSelected,
-                    { opacity: pressed ? 0.8 : 1 },
-                  ]}
-                  onPress={() => setPlayerOff(item)}
-                >
-                  <ThemedText type="body" style={sheetStyles.playerOptionText}>
-                    {getPlayerDisplayName(item)}
-                  </ThemedText>
-                  <ThemedText type="caption" numberOfLines={1}>
-                    {item.name}
-                  </ThemedText>
-                </Pressable>
-              )}
-            />
+            {renderPlayerGrid(players, playerOff, setPlayerOff)}
             <Pressable
               style={[
                 sheetStyles.confirmButton,
@@ -876,39 +855,18 @@ function ActionSheet({
                 Next
               </ThemedText>
             </Pressable>
-          </View>
+          </ScrollView>
         );
       } else {
         return (
-          <View style={sheetStyles.content}>
+          <ScrollView style={sheetStyles.scrollContent} showsVerticalScrollIndicator={false}>
             <ThemedText type="h4" style={sheetStyles.title}>
               Player coming on
             </ThemedText>
             {substitutes.length > 0 ? (
-              <FlatList
-                data={substitutes}
-                keyExtractor={(item) => item.id}
-                numColumns={3}
-                renderItem={({ item }) => (
-                  <Pressable
-                    style={({ pressed }) => [
-                      sheetStyles.playerOption,
-                      scorer?.id === item.id && sheetStyles.playerOptionSelected,
-                      { opacity: pressed ? 0.8 : 1 },
-                    ]}
-                    onPress={() => setScorer(item)}
-                  >
-                    <ThemedText type="body" style={sheetStyles.playerOptionText}>
-                      {getPlayerDisplayName(item)}
-                    </ThemedText>
-                    <ThemedText type="caption" numberOfLines={1}>
-                      {item.name}
-                    </ThemedText>
-                  </Pressable>
-                )}
-              />
+              renderPlayerGrid(substitutes, scorer, setScorer)
             ) : (
-              <ThemedText type="body" style={{ color: AppColors.textSecondary }}>
+              <ThemedText type="body" style={{ color: AppColors.textSecondary, textAlign: "center", padding: Spacing.xl }}>
                 No substitutes available
               </ThemedText>
             )}
@@ -924,7 +882,7 @@ function ActionSheet({
                 Confirm Sub
               </ThemedText>
             </Pressable>
-          </View>
+          </ScrollView>
         );
       }
     }
@@ -981,6 +939,9 @@ function ActionSheet({
         style={[sheetStyles.sheet, { paddingBottom: insets.bottom + Spacing.lg }]}
       >
         <View style={sheetStyles.handle} />
+        <Pressable style={sheetStyles.closeButton} onPress={onClose}>
+          <Feather name="x" size={24} color={AppColors.textSecondary} />
+        </Pressable>
         {renderContent()}
       </View>
     </Modal>
@@ -1062,6 +1023,9 @@ function TimelineSheet({ visible, events, players, onClose }: TimelineSheetProps
         ]}
       >
         <View style={sheetStyles.handle} />
+        <Pressable style={sheetStyles.closeButton} onPress={onClose}>
+          <Feather name="x" size={24} color={AppColors.textSecondary} />
+        </Pressable>
         <ThemedText type="h4" style={sheetStyles.title}>
           Match Timeline
         </ThemedText>
@@ -1231,44 +1195,42 @@ const styles = StyleSheet.create({
   },
   playerCircle: {
     position: "absolute",
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: AppColors.surface,
-    borderWidth: 2,
-    borderColor: "#FFFFFF",
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: AppColors.pitchGreen,
     justifyContent: "center",
     alignItems: "center",
+    borderWidth: 2,
+    borderColor: "#FFFFFF",
   },
   playerCircleText: {
     color: "#FFFFFF",
-    fontWeight: "600",
+    fontWeight: "700",
+    fontSize: 12,
   },
   benchContainer: {
-    paddingVertical: Spacing.md,
+    paddingVertical: Spacing.sm,
   },
   benchLabel: {
     color: AppColors.textSecondary,
-    marginBottom: Spacing.sm,
-    marginLeft: Spacing.xs,
+    marginBottom: Spacing.xs,
   },
   benchList: {
     gap: Spacing.sm,
   },
   benchPlayer: {
-    backgroundColor: AppColors.surface,
-    paddingVertical: Spacing.sm,
+    backgroundColor: AppColors.elevated,
+    paddingVertical: Spacing.xs,
     paddingHorizontal: Spacing.md,
     borderRadius: BorderRadius.xs,
-    borderLeftWidth: 3,
-    borderLeftColor: AppColors.warningYellow,
   },
   benchPlayerText: {
-    color: "#FFFFFF",
+    color: AppColors.textSecondary,
   },
   bottomBar: {
     paddingHorizontal: Spacing.md,
-    paddingTop: Spacing.md,
+    paddingTop: Spacing.sm,
     gap: Spacing.sm,
   },
   actionButtonsRow: {
@@ -1318,7 +1280,7 @@ const sheetStyles = StyleSheet.create({
     borderTopRightRadius: BorderRadius.lg,
     paddingTop: Spacing.md,
     paddingHorizontal: Spacing.lg,
-    maxHeight: SCREEN_HEIGHT * 0.6,
+    maxHeight: SCREEN_HEIGHT * 0.7,
   },
   timelineSheet: {
     maxHeight: SCREEN_HEIGHT * 0.5,
@@ -1329,23 +1291,37 @@ const sheetStyles = StyleSheet.create({
     backgroundColor: AppColors.textDisabled,
     borderRadius: 2,
     alignSelf: "center",
-    marginBottom: Spacing.lg,
+    marginBottom: Spacing.md,
+  },
+  closeButton: {
+    position: "absolute",
+    top: Spacing.md,
+    right: Spacing.md,
+    padding: Spacing.sm,
+    zIndex: 10,
   },
   content: {
-    flex: 1,
+    paddingTop: Spacing.md,
+  },
+  scrollContent: {
+    maxHeight: SCREEN_HEIGHT * 0.5,
   },
   title: {
     textAlign: "center",
     marginBottom: Spacing.lg,
   },
+  playerGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: Spacing.sm,
+    marginBottom: Spacing.md,
+  },
   playerOption: {
-    flex: 1,
-    margin: 4,
+    width: (SCREEN_WIDTH - Spacing.lg * 2 - Spacing.sm * 2) / 3,
     padding: Spacing.md,
     backgroundColor: AppColors.elevated,
     borderRadius: BorderRadius.sm,
     alignItems: "center",
-    minWidth: 80,
   },
   playerOptionSelected: {
     backgroundColor: AppColors.pitchGreen,
@@ -1392,7 +1368,7 @@ const sheetStyles = StyleSheet.create({
     paddingVertical: Spacing.md,
     borderRadius: BorderRadius.md,
     alignItems: "center",
-    marginTop: Spacing.lg,
+    marginTop: Spacing.md,
     marginBottom: Spacing.md,
   },
   confirmButtonDisabled: {

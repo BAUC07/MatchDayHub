@@ -55,6 +55,7 @@ export interface Match {
   isCompleted: boolean;
   totalMatchTime: number; // in seconds
   addedTime: number; // in seconds
+  plannedDuration?: number; // planned game duration in minutes
 }
 
 export interface SubscriptionState {

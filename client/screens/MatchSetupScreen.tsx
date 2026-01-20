@@ -40,6 +40,7 @@ const LOCATIONS: { key: MatchLocation; label: string }[] = [
   { key: "home", label: "Home" },
   { key: "away", label: "Away" },
 ];
+const GAME_DURATIONS = [20, 25, 30, 40, 45, 60, 70, 80, 90];
 
 interface DraggablePlayerProps {
   player: Player;
@@ -158,6 +159,7 @@ export default function MatchSetupScreen() {
   const [opposition, setOpposition] = useState("");
   const [location, setLocation] = useState<MatchLocation>("home");
   const [format, setFormat] = useState<MatchFormat>("11v11");
+  const [gameDuration, setGameDuration] = useState(60);
   const [playerStatuses, setPlayerStatuses] = useState<Record<string, PlayerStatus>>({});
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
@@ -250,17 +252,6 @@ export default function MatchSetupScreen() {
     });
   }, [maxPlayers]);
 
-  const markNotPlaying = useCallback((playerId: string) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    setPlayerStatuses((prev) => {
-      const current = prev[playerId];
-      if (current === "notPlaying") {
-        return { ...prev, [playerId]: "bench" };
-      }
-      return { ...prev, [playerId]: "notPlaying" };
-    });
-  }, []);
-
   const handleStartMatch = useCallback(async () => {
     if (!team || !isValid || creating) return;
 
@@ -283,6 +274,7 @@ export default function MatchSetupScreen() {
         isCompleted: false,
         totalMatchTime: 0,
         addedTime: 0,
+        plannedDuration: gameDuration,
       };
 
       await saveMatch(match);
@@ -301,6 +293,7 @@ export default function MatchSetupScreen() {
     opposition,
     location,
     format,
+    gameDuration,
     startingPlayers,
     benchPlayers,
     navigation,
@@ -431,6 +424,42 @@ export default function MatchSetupScreen() {
               </Pressable>
             ))}
           </View>
+        </View>
+
+        <View style={styles.durationRow}>
+          <Feather name="clock" size={16} color={AppColors.textSecondary} />
+          <ThemedText type="small" style={styles.durationLabel}>
+            Game Time
+          </ThemedText>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.durationOptions}
+          >
+            {GAME_DURATIONS.map((mins) => (
+              <Pressable
+                key={mins}
+                style={[
+                  styles.durationButton,
+                  gameDuration === mins && styles.durationButtonActive,
+                ]}
+                onPress={() => {
+                  Haptics.selectionAsync();
+                  setGameDuration(mins);
+                }}
+              >
+                <ThemedText
+                  type="small"
+                  style={[
+                    styles.durationText,
+                    gameDuration === mins && styles.durationTextActive,
+                  ]}
+                >
+                  {mins}m
+                </ThemedText>
+              </Pressable>
+            ))}
+          </ScrollView>
         </View>
       </Card>
 
@@ -585,6 +614,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     gap: Spacing.md,
+    marginBottom: Spacing.md,
   },
   locationButtons: {
     flexDirection: "row",
@@ -623,6 +653,35 @@ const styles = StyleSheet.create({
     color: AppColors.textSecondary,
   },
   formatTextActive: {
+    color: "#FFFFFF",
+    fontWeight: "600",
+  },
+  durationRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+  },
+  durationLabel: {
+    color: AppColors.textSecondary,
+  },
+  durationOptions: {
+    flexDirection: "row",
+    gap: Spacing.xs,
+    paddingRight: Spacing.md,
+  },
+  durationButton: {
+    paddingVertical: Spacing.xs,
+    paddingHorizontal: Spacing.md,
+    backgroundColor: AppColors.elevated,
+    borderRadius: BorderRadius.sm,
+  },
+  durationButtonActive: {
+    backgroundColor: AppColors.pitchGreen,
+  },
+  durationText: {
+    color: AppColors.textSecondary,
+  },
+  durationTextActive: {
     color: "#FFFFFF",
     fontWeight: "600",
   },
