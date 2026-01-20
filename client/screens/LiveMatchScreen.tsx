@@ -238,15 +238,15 @@ export default function LiveMatchScreen() {
     [addEvent]
   );
 
-  const handleEndMatch = useCallback(async () => {
+  const handleEndMatch = useCallback(() => {
+    if (!match || !team) return;
+
     Alert.alert("End Match", "Are you sure you want to end this match?", [
       { text: "Cancel", style: "cancel" },
       {
         text: "End Match",
         style: "destructive",
         onPress: async () => {
-          if (!match || !team) return;
-
           setIsRunning(false);
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
@@ -257,13 +257,13 @@ export default function LiveMatchScreen() {
                 ? "loss"
                 : "draw";
 
-          const updatedMatch = {
+          const updatedMatch: Match = {
             ...match,
             isCompleted: true,
             totalMatchTime: matchTime,
           };
 
-          const updatedTeam = {
+          const updatedTeam: Team = {
             ...team,
             matchesPlayed: team.matchesPlayed + 1,
             wins: team.wins + (result === "win" ? 1 : 0),
@@ -272,15 +272,19 @@ export default function LiveMatchScreen() {
             lastMatchDate: match.date,
           };
 
-          await Promise.all([saveMatch(updatedMatch), saveTeam(updatedTeam)]);
-
-          navigation.replace("MatchSummary", { matchId: match.id });
+          try {
+            await saveMatch(updatedMatch);
+            await saveTeam(updatedTeam);
+            navigation.replace("MatchSummary", { matchId: match.id });
+          } catch (error) {
+            console.error("Error ending match:", error);
+          }
         },
       },
     ]);
   }, [match, team, matchTime, navigation]);
 
-  const undoLastEvent = useCallback(async () => {
+  const undoLastEvent = useCallback(() => {
     if (!match || match.events.length === 0) return;
 
     Alert.alert("Undo Last Event", "Remove the most recent event?", [
@@ -609,6 +613,7 @@ function ActionSheet({
   const insets = useSafeAreaInsets();
   const [step, setStep] = useState(0);
   const [scorer, setScorer] = useState<Player | null>(null);
+  const [assist, setAssist] = useState<Player | null>(null);
   const [goalType, setGoalType] = useState<GoalType>("open_play");
   const [cardType, setCardType] = useState<CardType>("yellow");
   const [playerOff, setPlayerOff] = useState<Player | null>(null);
@@ -617,6 +622,7 @@ function ActionSheet({
     if (visible) {
       setStep(0);
       setScorer(selectedPlayer);
+      setAssist(null);
       setGoalType("open_play");
       setCardType("yellow");
       setPlayerOff(null);
@@ -626,27 +632,27 @@ function ActionSheet({
   const renderPlayerGrid = (
     playerList: Player[],
     selected: Player | null,
-    onSelect: (p: Player) => void
+    onSelect: (p: Player) => void,
+    allowNone?: boolean
   ) => (
     <View style={sheetStyles.playerGrid}>
+      {allowNone ? (
+        <Pressable
+          style={[sheetStyles.playerOption, !selected && sheetStyles.playerOptionSelected]}
+          onPress={() => { Haptics.selectionAsync(); onSelect(null as any); }}
+        >
+          <ThemedText type="body" style={sheetStyles.playerOptionText}>-</ThemedText>
+          <ThemedText type="caption" style={{ color: AppColors.textSecondary }}>None</ThemedText>
+        </Pressable>
+      ) : null}
       {playerList.map((item) => (
         <Pressable
           key={item.id}
-          style={[
-            sheetStyles.playerOption,
-            selected?.id === item.id && sheetStyles.playerOptionSelected,
-          ]}
-          onPress={() => {
-            Haptics.selectionAsync();
-            onSelect(item);
-          }}
+          style={[sheetStyles.playerOption, selected?.id === item.id && sheetStyles.playerOptionSelected]}
+          onPress={() => { Haptics.selectionAsync(); onSelect(item); }}
         >
-          <ThemedText type="body" style={sheetStyles.playerOptionText}>
-            {getPlayerDisplayName(item)}
-          </ThemedText>
-          <ThemedText type="caption" numberOfLines={1} style={{ color: AppColors.textSecondary }}>
-            {item.name}
-          </ThemedText>
+          <ThemedText type="body" style={sheetStyles.playerOptionText}>{getPlayerDisplayName(item)}</ThemedText>
+          <ThemedText type="caption" numberOfLines={1} style={{ color: AppColors.textSecondary }}>{item.name}</ThemedText>
         </Pressable>
       ))}
     </View>
@@ -657,62 +663,46 @@ function ActionSheet({
       if (step === 0) {
         return (
           <ScrollView style={sheetStyles.scrollContent} showsVerticalScrollIndicator={false}>
-            <ThemedText type="h4" style={sheetStyles.title}>
-              Who scored?
-            </ThemedText>
+            <ThemedText type="h4" style={sheetStyles.title}>Who scored?</ThemedText>
             {renderPlayerGrid(players, scorer, setScorer)}
             <Pressable
-              style={[
-                sheetStyles.confirmButton,
-                !scorer && sheetStyles.confirmButtonDisabled,
-              ]}
+              style={[sheetStyles.confirmButton, !scorer && sheetStyles.confirmButtonDisabled]}
               onPress={() => scorer && setStep(1)}
               disabled={!scorer}
             >
-              <ThemedText type="button" style={sheetStyles.confirmButtonText}>
-                Next
-              </ThemedText>
+              <ThemedText type="button" style={sheetStyles.confirmButtonText}>Next</ThemedText>
+            </Pressable>
+          </ScrollView>
+        );
+      } else if (step === 1) {
+        return (
+          <ScrollView style={sheetStyles.scrollContent} showsVerticalScrollIndicator={false}>
+            <ThemedText type="h4" style={sheetStyles.title}>Who assisted?</ThemedText>
+            {renderPlayerGrid(players.filter(p => p.id !== scorer?.id), assist, setAssist, true)}
+            <Pressable style={sheetStyles.confirmButton} onPress={() => setStep(2)}>
+              <ThemedText type="button" style={sheetStyles.confirmButtonText}>{assist ? "Next" : "Skip"}</ThemedText>
             </Pressable>
           </ScrollView>
         );
       } else {
         return (
           <View style={sheetStyles.content}>
-            <ThemedText type="h4" style={sheetStyles.title}>
-              Goal type
-            </ThemedText>
+            <ThemedText type="h4" style={sheetStyles.title}>Goal type</ThemedText>
             <View style={sheetStyles.optionsRow}>
               {(["open_play", "corner", "free_kick"] as GoalType[]).map((type) => (
                 <Pressable
                   key={type}
-                  style={[
-                    sheetStyles.typeOption,
-                    goalType === type && sheetStyles.typeOptionSelected,
-                  ]}
-                  onPress={() => {
-                    Haptics.selectionAsync();
-                    setGoalType(type);
-                  }}
+                  style={[sheetStyles.typeOption, goalType === type && sheetStyles.typeOptionSelected]}
+                  onPress={() => { Haptics.selectionAsync(); setGoalType(type); }}
                 >
-                  <ThemedText
-                    type="small"
-                    style={[
-                      sheetStyles.typeOptionText,
-                      goalType === type && sheetStyles.typeOptionTextSelected,
-                    ]}
-                  >
+                  <ThemedText type="small" style={[sheetStyles.typeOptionText, goalType === type && sheetStyles.typeOptionTextSelected]}>
                     {type.replace("_", " ")}
                   </ThemedText>
                 </Pressable>
               ))}
             </View>
-            <Pressable
-              style={sheetStyles.confirmButton}
-              onPress={() => scorer && onGoalFor(scorer, goalType)}
-            >
-              <ThemedText type="button" style={sheetStyles.confirmButtonText}>
-                Confirm Goal
-              </ThemedText>
+            <Pressable style={sheetStyles.confirmButton} onPress={() => scorer && onGoalFor(scorer, goalType, assist || undefined)}>
+              <ThemedText type="button" style={sheetStyles.confirmButtonText}>Confirm Goal</ThemedText>
             </Pressable>
           </View>
         );
@@ -722,41 +712,22 @@ function ActionSheet({
     if (action === "goal_against") {
       return (
         <View style={sheetStyles.content}>
-          <ThemedText type="h4" style={sheetStyles.title}>
-            Goal conceded type
-          </ThemedText>
+          <ThemedText type="h4" style={sheetStyles.title}>Goal conceded type</ThemedText>
           <View style={sheetStyles.optionsRow}>
             {(["open_play", "corner", "free_kick"] as GoalType[]).map((type) => (
               <Pressable
                 key={type}
-                style={[
-                  sheetStyles.typeOption,
-                  goalType === type && sheetStyles.typeOptionSelected,
-                ]}
-                onPress={() => {
-                  Haptics.selectionAsync();
-                  setGoalType(type);
-                }}
+                style={[sheetStyles.typeOption, goalType === type && sheetStyles.typeOptionSelected]}
+                onPress={() => { Haptics.selectionAsync(); setGoalType(type); }}
               >
-                <ThemedText
-                  type="small"
-                  style={[
-                    sheetStyles.typeOptionText,
-                    goalType === type && sheetStyles.typeOptionTextSelected,
-                  ]}
-                >
+                <ThemedText type="small" style={[sheetStyles.typeOptionText, goalType === type && sheetStyles.typeOptionTextSelected]}>
                   {type.replace("_", " ")}
                 </ThemedText>
               </Pressable>
             ))}
           </View>
-          <Pressable
-            style={sheetStyles.confirmButton}
-            onPress={() => onGoalAgainst(goalType)}
-          >
-            <ThemedText type="button" style={sheetStyles.confirmButtonText}>
-              Confirm
-            </ThemedText>
+          <Pressable style={sheetStyles.confirmButton} onPress={() => onGoalAgainst(goalType)}>
+            <ThemedText type="button" style={sheetStyles.confirmButtonText}>Confirm</ThemedText>
           </Pressable>
         </View>
       );
@@ -766,69 +737,37 @@ function ActionSheet({
       if (step === 0) {
         return (
           <ScrollView style={sheetStyles.scrollContent} showsVerticalScrollIndicator={false}>
-            <ThemedText type="h4" style={sheetStyles.title}>
-              Who received the card?
-            </ThemedText>
+            <ThemedText type="h4" style={sheetStyles.title}>Who received the card?</ThemedText>
             {renderPlayerGrid(players, scorer, setScorer)}
             <Pressable
-              style={[
-                sheetStyles.confirmButton,
-                !scorer && sheetStyles.confirmButtonDisabled,
-              ]}
+              style={[sheetStyles.confirmButton, !scorer && sheetStyles.confirmButtonDisabled]}
               onPress={() => scorer && setStep(1)}
               disabled={!scorer}
             >
-              <ThemedText type="button" style={sheetStyles.confirmButtonText}>
-                Next
-              </ThemedText>
+              <ThemedText type="button" style={sheetStyles.confirmButtonText}>Next</ThemedText>
             </Pressable>
           </ScrollView>
         );
       } else {
         return (
           <View style={sheetStyles.content}>
-            <ThemedText type="h4" style={sheetStyles.title}>
-              Card type
-            </ThemedText>
+            <ThemedText type="h4" style={sheetStyles.title}>Card type</ThemedText>
             <View style={sheetStyles.optionsRow}>
               <Pressable
-                style={[
-                  sheetStyles.cardOption,
-                  { backgroundColor: AppColors.warningYellow },
-                  cardType === "yellow" && sheetStyles.cardOptionSelected,
-                ]}
-                onPress={() => {
-                  Haptics.selectionAsync();
-                  setCardType("yellow");
-                }}
+                style={[sheetStyles.cardOption, { backgroundColor: AppColors.warningYellow }, cardType === "yellow" && sheetStyles.cardOptionSelected]}
+                onPress={() => { Haptics.selectionAsync(); setCardType("yellow"); }}
               >
-                <ThemedText type="button" style={{ color: "#000" }}>
-                  Yellow
-                </ThemedText>
+                <ThemedText type="button" style={{ color: "#000" }}>Yellow</ThemedText>
               </Pressable>
               <Pressable
-                style={[
-                  sheetStyles.cardOption,
-                  { backgroundColor: AppColors.redCard },
-                  cardType === "red" && sheetStyles.cardOptionSelected,
-                ]}
-                onPress={() => {
-                  Haptics.selectionAsync();
-                  setCardType("red");
-                }}
+                style={[sheetStyles.cardOption, { backgroundColor: AppColors.redCard }, cardType === "red" && sheetStyles.cardOptionSelected]}
+                onPress={() => { Haptics.selectionAsync(); setCardType("red"); }}
               >
-                <ThemedText type="button" style={{ color: "#FFF" }}>
-                  Red
-                </ThemedText>
+                <ThemedText type="button" style={{ color: "#FFF" }}>Red</ThemedText>
               </Pressable>
             </View>
-            <Pressable
-              style={sheetStyles.confirmButton}
-              onPress={() => scorer && onCard(scorer, cardType)}
-            >
-              <ThemedText type="button" style={sheetStyles.confirmButtonText}>
-                Confirm
-              </ThemedText>
+            <Pressable style={sheetStyles.confirmButton} onPress={() => scorer && onCard(scorer, cardType)}>
+              <ThemedText type="button" style={sheetStyles.confirmButtonText}>Confirm</ThemedText>
             </Pressable>
           </View>
         );
@@ -839,30 +778,21 @@ function ActionSheet({
       if (step === 0) {
         return (
           <ScrollView style={sheetStyles.scrollContent} showsVerticalScrollIndicator={false}>
-            <ThemedText type="h4" style={sheetStyles.title}>
-              Player coming off
-            </ThemedText>
+            <ThemedText type="h4" style={sheetStyles.title}>Player coming off</ThemedText>
             {renderPlayerGrid(players, playerOff, setPlayerOff)}
             <Pressable
-              style={[
-                sheetStyles.confirmButton,
-                !playerOff && sheetStyles.confirmButtonDisabled,
-              ]}
+              style={[sheetStyles.confirmButton, !playerOff && sheetStyles.confirmButtonDisabled]}
               onPress={() => playerOff && setStep(1)}
               disabled={!playerOff}
             >
-              <ThemedText type="button" style={sheetStyles.confirmButtonText}>
-                Next
-              </ThemedText>
+              <ThemedText type="button" style={sheetStyles.confirmButtonText}>Next</ThemedText>
             </Pressable>
           </ScrollView>
         );
       } else {
         return (
           <ScrollView style={sheetStyles.scrollContent} showsVerticalScrollIndicator={false}>
-            <ThemedText type="h4" style={sheetStyles.title}>
-              Player coming on
-            </ThemedText>
+            <ThemedText type="h4" style={sheetStyles.title}>Player coming on</ThemedText>
             {substitutes.length > 0 ? (
               renderPlayerGrid(substitutes, scorer, setScorer)
             ) : (
@@ -871,16 +801,11 @@ function ActionSheet({
               </ThemedText>
             )}
             <Pressable
-              style={[
-                sheetStyles.confirmButton,
-                !scorer && sheetStyles.confirmButtonDisabled,
-              ]}
+              style={[sheetStyles.confirmButton, !scorer && sheetStyles.confirmButtonDisabled]}
               onPress={() => playerOff && scorer && onSubstitution(playerOff, scorer)}
               disabled={!scorer}
             >
-              <ThemedText type="button" style={sheetStyles.confirmButtonText}>
-                Confirm Sub
-              </ThemedText>
+              <ThemedText type="button" style={sheetStyles.confirmButtonText}>Confirm Sub</ThemedText>
             </Pressable>
           </ScrollView>
         );
@@ -890,35 +815,21 @@ function ActionSheet({
     if (action === "penalty") {
       return (
         <View style={sheetStyles.content}>
-          <ThemedText type="h4" style={sheetStyles.title}>
-            Penalty
-          </ThemedText>
+          <ThemedText type="h4" style={sheetStyles.title}>Penalty</ThemedText>
           <View style={sheetStyles.penaltyOptions}>
-            <Pressable
-              style={sheetStyles.penaltyButton}
-              onPress={() => onPenalty(true, "scored")}
-            >
+            <Pressable style={sheetStyles.penaltyButton} onPress={() => onPenalty(true, "scored")}>
               <Feather name="check-circle" size={24} color={AppColors.pitchGreen} />
               <ThemedText type="body">For Us - Scored</ThemedText>
             </Pressable>
-            <Pressable
-              style={sheetStyles.penaltyButton}
-              onPress={() => onPenalty(true, "missed")}
-            >
+            <Pressable style={sheetStyles.penaltyButton} onPress={() => onPenalty(true, "missed")}>
               <Feather name="x-circle" size={24} color={AppColors.redCard} />
               <ThemedText type="body">For Us - Missed</ThemedText>
             </Pressable>
-            <Pressable
-              style={sheetStyles.penaltyButton}
-              onPress={() => onPenalty(false, "scored")}
-            >
+            <Pressable style={sheetStyles.penaltyButton} onPress={() => onPenalty(false, "scored")}>
               <Feather name="check-circle" size={24} color={AppColors.redCard} />
               <ThemedText type="body">Against Us - Scored</ThemedText>
             </Pressable>
-            <Pressable
-              style={sheetStyles.penaltyButton}
-              onPress={() => onPenalty(false, "missed")}
-            >
+            <Pressable style={sheetStyles.penaltyButton} onPress={() => onPenalty(false, "missed")}>
               <Feather name="x-circle" size={24} color={AppColors.pitchGreen} />
               <ThemedText type="body">Against Us - Missed</ThemedText>
             </Pressable>
@@ -932,12 +843,8 @@ function ActionSheet({
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={sheetStyles.overlay} onPress={onClose}>
-        <View />
-      </Pressable>
-      <View
-        style={[sheetStyles.sheet, { paddingBottom: insets.bottom + Spacing.lg }]}
-      >
+      <Pressable style={sheetStyles.overlay} onPress={onClose}><View /></Pressable>
+      <View style={[sheetStyles.sheet, { paddingBottom: insets.bottom + Spacing.lg }]}>
         <View style={sheetStyles.handle} />
         <Pressable style={sheetStyles.closeButton} onPress={onClose}>
           <Feather name="x" size={24} color={AppColors.textSecondary} />
@@ -972,17 +879,7 @@ function TimelineSheet({ visible, events, players, onClose }: TimelineSheetProps
         return <Feather name="target" size={16} color={AppColors.redCard} />;
       case "card":
         return (
-          <View
-            style={{
-              width: 12,
-              height: 16,
-              backgroundColor:
-                event.cardType === "yellow"
-                  ? AppColors.warningYellow
-                  : AppColors.redCard,
-              borderRadius: 2,
-            }}
-          />
+          <View style={{ width: 12, height: 16, backgroundColor: event.cardType === "yellow" ? AppColors.warningYellow : AppColors.redCard, borderRadius: 2 }} />
         );
       case "substitution":
         return <Feather name="refresh-cw" size={16} color={AppColors.textSecondary} />;
@@ -996,7 +893,8 @@ function TimelineSheet({ visible, events, players, onClose }: TimelineSheetProps
   const getEventText = (event: MatchEvent) => {
     switch (event.type) {
       case "goal_for":
-        return `Goal: ${getPlayerName(event.playerId)}`;
+        const assistText = event.assistPlayerId ? ` (assist: ${getPlayerName(event.assistPlayerId)})` : "";
+        return `Goal: ${getPlayerName(event.playerId)}${assistText}`;
       case "goal_against":
         return `Goal conceded (${event.goalType?.replace("_", " ")})`;
       case "card":
@@ -1012,29 +910,17 @@ function TimelineSheet({ visible, events, players, onClose }: TimelineSheetProps
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={sheetStyles.overlay} onPress={onClose}>
-        <View />
-      </Pressable>
-      <View
-        style={[
-          sheetStyles.sheet,
-          sheetStyles.timelineSheet,
-          { paddingBottom: insets.bottom + Spacing.lg },
-        ]}
-      >
+      <Pressable style={sheetStyles.overlay} onPress={onClose}><View /></Pressable>
+      <View style={[sheetStyles.sheet, sheetStyles.timelineSheet, { paddingBottom: insets.bottom + Spacing.lg }]}>
         <View style={sheetStyles.handle} />
         <Pressable style={sheetStyles.closeButton} onPress={onClose}>
           <Feather name="x" size={24} color={AppColors.textSecondary} />
         </Pressable>
-        <ThemedText type="h4" style={sheetStyles.title}>
-          Match Timeline
-        </ThemedText>
+        <ThemedText type="h4" style={sheetStyles.title}>Match Timeline</ThemedText>
         {events.length === 0 ? (
           <View style={sheetStyles.emptyTimeline}>
             <Feather name="clock" size={32} color={AppColors.textSecondary} />
-            <ThemedText type="body" style={{ color: AppColors.textSecondary }}>
-              No events yet
-            </ThemedText>
+            <ThemedText type="body" style={{ color: AppColors.textSecondary }}>No events yet</ThemedText>
           </View>
         ) : (
           <FlatList
@@ -1042,13 +928,9 @@ function TimelineSheet({ visible, events, players, onClose }: TimelineSheetProps
             keyExtractor={(item) => item.id}
             renderItem={({ item }) => (
               <View style={sheetStyles.timelineItem}>
-                <ThemedText type="caption" style={sheetStyles.timelineTime}>
-                  {formatMatchTime(item.timestamp)}
-                </ThemedText>
+                <ThemedText type="caption" style={sheetStyles.timelineTime}>{formatMatchTime(item.timestamp)}</ThemedText>
                 {getEventIcon(item)}
-                <ThemedText type="small" style={sheetStyles.timelineText}>
-                  {getEventText(item)}
-                </ThemedText>
+                <ThemedText type="small" style={sheetStyles.timelineText}>{getEventText(item)}</ThemedText>
               </View>
             )}
           />
@@ -1059,353 +941,74 @@ function TimelineSheet({ visible, events, players, onClose }: TimelineSheetProps
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  topBar: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: Spacing.lg,
-    paddingBottom: Spacing.sm,
-  },
-  topBarLeft: {
-    width: 40,
-  },
-  topBarRight: {
-    width: 40,
-    alignItems: "flex-end",
-  },
-  scoreSection: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  scoreText: {
-    color: "#FFFFFF",
-    minWidth: 50,
-    textAlign: "center",
-  },
-  scoreDivider: {
-    color: AppColors.textSecondary,
-    marginHorizontal: Spacing.md,
-  },
-  clockSection: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: Spacing.md,
-    marginBottom: Spacing.sm,
-  },
-  clockText: {
-    color: "#FFFFFF",
-    fontVariant: ["tabular-nums"],
-  },
-  clockButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: AppColors.pitchGreen,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  teamsRow: {
-    flexDirection: "row",
-    justifyContent: "center",
-    alignItems: "center",
-    gap: Spacing.md,
-    marginBottom: Spacing.md,
-  },
-  teamLabel: {
-    color: AppColors.textSecondary,
-    maxWidth: 120,
-  },
-  vsLabel: {
-    color: AppColors.textDisabled,
-  },
-  middleZone: {
-    flex: 1,
-    paddingHorizontal: Spacing.md,
-  },
-  pitchContainer: {
-    flex: 1,
-    justifyContent: "center",
-  },
-  pitch: {
-    width: "100%",
-    aspectRatio: 1.5,
-    backgroundColor: "#1a472a",
-    borderRadius: BorderRadius.md,
-    borderWidth: 2,
-    borderColor: "#2a6a3a",
-    position: "relative",
-    overflow: "hidden",
-  },
-  pitchCenterCircle: {
-    position: "absolute",
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    borderWidth: 2,
-    borderColor: "rgba(255,255,255,0.3)",
-    left: "50%",
-    top: "50%",
-    marginLeft: -30,
-    marginTop: -30,
-  },
-  pitchCenterLine: {
-    position: "absolute",
-    width: 2,
-    height: "100%",
-    backgroundColor: "rgba(255,255,255,0.3)",
-    left: "50%",
-    marginLeft: -1,
-  },
-  pitchGoalAreaTop: {
-    position: "absolute",
-    width: 80,
-    height: 30,
-    borderWidth: 2,
-    borderColor: "rgba(255,255,255,0.3)",
-    borderTopWidth: 0,
-    left: "50%",
-    marginLeft: -40,
-    top: 0,
-  },
-  pitchGoalAreaBottom: {
-    position: "absolute",
-    width: 80,
-    height: 30,
-    borderWidth: 2,
-    borderColor: "rgba(255,255,255,0.3)",
-    borderBottomWidth: 0,
-    left: "50%",
-    marginLeft: -40,
-    bottom: 0,
-  },
-  playersGrid: {
-    position: "absolute",
-    width: "100%",
-    height: "100%",
-  },
-  playerCircle: {
-    position: "absolute",
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: AppColors.pitchGreen,
-    justifyContent: "center",
-    alignItems: "center",
-    borderWidth: 2,
-    borderColor: "#FFFFFF",
-  },
-  playerCircleText: {
-    color: "#FFFFFF",
-    fontWeight: "700",
-    fontSize: 12,
-  },
-  benchContainer: {
-    paddingVertical: Spacing.sm,
-  },
-  benchLabel: {
-    color: AppColors.textSecondary,
-    marginBottom: Spacing.xs,
-  },
-  benchList: {
-    gap: Spacing.sm,
-  },
-  benchPlayer: {
-    backgroundColor: AppColors.elevated,
-    paddingVertical: Spacing.xs,
-    paddingHorizontal: Spacing.md,
-    borderRadius: BorderRadius.xs,
-  },
-  benchPlayerText: {
-    color: AppColors.textSecondary,
-  },
-  bottomBar: {
-    paddingHorizontal: Spacing.md,
-    paddingTop: Spacing.sm,
-    gap: Spacing.sm,
-  },
-  actionButtonsRow: {
-    flexDirection: "row",
-    gap: Spacing.sm,
-  },
-  actionButton: {
-    flex: 1,
-    height: Spacing.actionButtonHeight,
-    borderRadius: BorderRadius.xs,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  actionButtonText: {
-    color: "#FFFFFF",
-    fontWeight: "700",
-    fontSize: 14,
-  },
-  goalButton: {
-    backgroundColor: AppColors.pitchGreen,
-  },
-  goalAgainstButton: {
-    backgroundColor: "#4a4a4a",
-  },
-  cardButton: {
-    backgroundColor: AppColors.warningYellow,
-  },
-  subButton: {
-    backgroundColor: "#3a5a8a",
-  },
-  penaltyButton: {
-    backgroundColor: "#6a4a8a",
-  },
-  endButton: {
-    backgroundColor: AppColors.redCard,
-  },
+  container: { flex: 1 },
+  loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
+  topBar: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: Spacing.lg, paddingBottom: Spacing.sm },
+  topBarLeft: { width: 40 },
+  topBarRight: { width: 40, alignItems: "flex-end" },
+  scoreSection: { flexDirection: "row", alignItems: "center", justifyContent: "center" },
+  scoreText: { color: "#FFFFFF", minWidth: 50, textAlign: "center" },
+  scoreDivider: { color: AppColors.textSecondary, marginHorizontal: Spacing.md },
+  clockSection: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: Spacing.md, marginBottom: Spacing.sm },
+  clockText: { color: "#FFFFFF", fontVariant: ["tabular-nums"] },
+  clockButton: { width: 40, height: 40, borderRadius: 20, backgroundColor: AppColors.pitchGreen, justifyContent: "center", alignItems: "center" },
+  teamsRow: { flexDirection: "row", justifyContent: "center", alignItems: "center", gap: Spacing.md, marginBottom: Spacing.md },
+  teamLabel: { color: AppColors.textSecondary, maxWidth: 120 },
+  vsLabel: { color: AppColors.textDisabled },
+  middleZone: { flex: 1, paddingHorizontal: Spacing.md },
+  pitchContainer: { flex: 1, justifyContent: "center" },
+  pitch: { width: "100%", aspectRatio: 1.5, backgroundColor: "#1a472a", borderRadius: BorderRadius.md, borderWidth: 2, borderColor: "#2a6a3a", position: "relative", overflow: "hidden" },
+  pitchCenterCircle: { position: "absolute", width: 60, height: 60, borderRadius: 30, borderWidth: 2, borderColor: "rgba(255,255,255,0.3)", left: "50%", top: "50%", marginLeft: -30, marginTop: -30 },
+  pitchCenterLine: { position: "absolute", width: 2, height: "100%", backgroundColor: "rgba(255,255,255,0.3)", left: "50%", marginLeft: -1 },
+  pitchGoalAreaTop: { position: "absolute", width: 80, height: 30, borderWidth: 2, borderColor: "rgba(255,255,255,0.3)", borderTopWidth: 0, left: "50%", marginLeft: -40, top: 0 },
+  pitchGoalAreaBottom: { position: "absolute", width: 80, height: 30, borderWidth: 2, borderColor: "rgba(255,255,255,0.3)", borderBottomWidth: 0, left: "50%", marginLeft: -40, bottom: 0 },
+  playersGrid: { position: "absolute", width: "100%", height: "100%" },
+  playerCircle: { position: "absolute", width: 50, height: 50, borderRadius: 25, backgroundColor: AppColors.pitchGreen, justifyContent: "center", alignItems: "center", borderWidth: 2, borderColor: "#FFFFFF" },
+  playerCircleText: { color: "#FFFFFF", fontWeight: "700", fontSize: 12 },
+  benchContainer: { paddingVertical: Spacing.sm },
+  benchLabel: { color: AppColors.textSecondary, marginBottom: Spacing.xs },
+  benchList: { gap: Spacing.sm },
+  benchPlayer: { backgroundColor: AppColors.elevated, paddingVertical: Spacing.xs, paddingHorizontal: Spacing.md, borderRadius: BorderRadius.xs },
+  benchPlayerText: { color: AppColors.textSecondary },
+  bottomBar: { paddingHorizontal: Spacing.md, paddingTop: Spacing.sm, gap: Spacing.sm },
+  actionButtonsRow: { flexDirection: "row", gap: Spacing.sm },
+  actionButton: { flex: 1, height: Spacing.actionButtonHeight, borderRadius: BorderRadius.xs, justifyContent: "center", alignItems: "center" },
+  actionButtonText: { color: "#FFFFFF", fontWeight: "700", fontSize: 14 },
+  goalButton: { backgroundColor: AppColors.pitchGreen },
+  goalAgainstButton: { backgroundColor: "#4a4a4a" },
+  cardButton: { backgroundColor: AppColors.warningYellow },
+  subButton: { backgroundColor: "#3a5a8a" },
+  penaltyButton: { backgroundColor: "#6a4a8a" },
+  endButton: { backgroundColor: AppColors.redCard },
 });
 
 const sheetStyles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.5)",
-  },
-  sheet: {
-    backgroundColor: AppColors.surface,
-    borderTopLeftRadius: BorderRadius.lg,
-    borderTopRightRadius: BorderRadius.lg,
-    paddingTop: Spacing.md,
-    paddingHorizontal: Spacing.lg,
-    maxHeight: SCREEN_HEIGHT * 0.7,
-  },
-  timelineSheet: {
-    maxHeight: SCREEN_HEIGHT * 0.5,
-  },
-  handle: {
-    width: 40,
-    height: 4,
-    backgroundColor: AppColors.textDisabled,
-    borderRadius: 2,
-    alignSelf: "center",
-    marginBottom: Spacing.md,
-  },
-  closeButton: {
-    position: "absolute",
-    top: Spacing.md,
-    right: Spacing.md,
-    padding: Spacing.sm,
-    zIndex: 10,
-  },
-  content: {
-    paddingTop: Spacing.md,
-  },
-  scrollContent: {
-    maxHeight: SCREEN_HEIGHT * 0.5,
-  },
-  title: {
-    textAlign: "center",
-    marginBottom: Spacing.lg,
-  },
-  playerGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: Spacing.sm,
-    marginBottom: Spacing.md,
-  },
-  playerOption: {
-    width: (SCREEN_WIDTH - Spacing.lg * 2 - Spacing.sm * 2) / 3,
-    padding: Spacing.md,
-    backgroundColor: AppColors.elevated,
-    borderRadius: BorderRadius.sm,
-    alignItems: "center",
-  },
-  playerOptionSelected: {
-    backgroundColor: AppColors.pitchGreen,
-  },
-  playerOptionText: {
-    fontWeight: "600",
-    marginBottom: 2,
-  },
-  optionsRow: {
-    flexDirection: "row",
-    gap: Spacing.sm,
-    marginBottom: Spacing.xl,
-  },
-  typeOption: {
-    flex: 1,
-    paddingVertical: Spacing.md,
-    backgroundColor: AppColors.elevated,
-    borderRadius: BorderRadius.sm,
-    alignItems: "center",
-  },
-  typeOptionSelected: {
-    backgroundColor: AppColors.pitchGreen,
-  },
-  typeOptionText: {
-    color: AppColors.textSecondary,
-    textTransform: "capitalize",
-  },
-  typeOptionTextSelected: {
-    color: "#FFFFFF",
-    fontWeight: "600",
-  },
-  cardOption: {
-    flex: 1,
-    paddingVertical: Spacing.lg,
-    borderRadius: BorderRadius.sm,
-    alignItems: "center",
-  },
-  cardOptionSelected: {
-    borderWidth: 3,
-    borderColor: "#FFFFFF",
-  },
-  confirmButton: {
-    backgroundColor: AppColors.pitchGreen,
-    paddingVertical: Spacing.md,
-    borderRadius: BorderRadius.md,
-    alignItems: "center",
-    marginTop: Spacing.md,
-    marginBottom: Spacing.md,
-  },
-  confirmButtonDisabled: {
-    backgroundColor: AppColors.textDisabled,
-  },
-  confirmButtonText: {
-    color: "#FFFFFF",
-  },
-  penaltyOptions: {
-    gap: Spacing.md,
-  },
-  penaltyButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.md,
-    backgroundColor: AppColors.elevated,
-    padding: Spacing.lg,
-    borderRadius: BorderRadius.sm,
-  },
-  emptyTimeline: {
-    alignItems: "center",
-    paddingVertical: Spacing["3xl"],
-    gap: Spacing.md,
-  },
-  timelineItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.md,
-    paddingVertical: Spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: AppColors.elevated,
-  },
-  timelineTime: {
-    color: AppColors.textSecondary,
-    width: 50,
-  },
-  timelineText: {
-    flex: 1,
-  },
+  overlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)" },
+  sheet: { backgroundColor: AppColors.surface, borderTopLeftRadius: BorderRadius.lg, borderTopRightRadius: BorderRadius.lg, paddingTop: Spacing.md, paddingHorizontal: Spacing.lg, maxHeight: SCREEN_HEIGHT * 0.7 },
+  timelineSheet: { maxHeight: SCREEN_HEIGHT * 0.5 },
+  handle: { width: 40, height: 4, backgroundColor: AppColors.textDisabled, borderRadius: 2, alignSelf: "center", marginBottom: Spacing.md },
+  closeButton: { position: "absolute", top: Spacing.md, right: Spacing.md, padding: Spacing.sm, zIndex: 10 },
+  content: { paddingTop: Spacing.md },
+  scrollContent: { maxHeight: SCREEN_HEIGHT * 0.5 },
+  title: { textAlign: "center", marginBottom: Spacing.lg },
+  playerGrid: { flexDirection: "row", flexWrap: "wrap", gap: Spacing.sm, marginBottom: Spacing.md },
+  playerOption: { width: (SCREEN_WIDTH - Spacing.lg * 2 - Spacing.sm * 2) / 3, padding: Spacing.md, backgroundColor: AppColors.elevated, borderRadius: BorderRadius.sm, alignItems: "center" },
+  playerOptionSelected: { backgroundColor: AppColors.pitchGreen },
+  playerOptionText: { fontWeight: "600", marginBottom: 2 },
+  optionsRow: { flexDirection: "row", gap: Spacing.sm, marginBottom: Spacing.xl },
+  typeOption: { flex: 1, paddingVertical: Spacing.md, backgroundColor: AppColors.elevated, borderRadius: BorderRadius.sm, alignItems: "center" },
+  typeOptionSelected: { backgroundColor: AppColors.pitchGreen },
+  typeOptionText: { color: AppColors.textSecondary, textTransform: "capitalize" },
+  typeOptionTextSelected: { color: "#FFFFFF", fontWeight: "600" },
+  cardOption: { flex: 1, paddingVertical: Spacing.lg, borderRadius: BorderRadius.sm, alignItems: "center" },
+  cardOptionSelected: { borderWidth: 3, borderColor: "#FFFFFF" },
+  confirmButton: { backgroundColor: AppColors.pitchGreen, paddingVertical: Spacing.md, borderRadius: BorderRadius.md, alignItems: "center", marginTop: Spacing.md, marginBottom: Spacing.md },
+  confirmButtonDisabled: { backgroundColor: AppColors.textDisabled },
+  confirmButtonText: { color: "#FFFFFF" },
+  penaltyOptions: { gap: Spacing.md },
+  penaltyButton: { flexDirection: "row", alignItems: "center", gap: Spacing.md, backgroundColor: AppColors.elevated, padding: Spacing.lg, borderRadius: BorderRadius.sm },
+  emptyTimeline: { alignItems: "center", paddingVertical: Spacing["3xl"], gap: Spacing.md },
+  timelineItem: { flexDirection: "row", alignItems: "center", gap: Spacing.md, paddingVertical: Spacing.md, borderBottomWidth: 1, borderBottomColor: AppColors.elevated },
+  timelineTime: { color: AppColors.textSecondary, width: 50 },
+  timelineText: { flex: 1 },
 });

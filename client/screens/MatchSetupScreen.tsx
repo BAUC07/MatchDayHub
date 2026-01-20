@@ -4,7 +4,6 @@ import {
   StyleSheet,
   TextInput,
   Pressable,
-  ScrollView,
   LayoutRectangle,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -23,7 +22,6 @@ import Animated, {
 import * as Haptics from "expo-haptics";
 
 import { ThemedText } from "@/components/ThemedText";
-import { Card } from "@/components/Card";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, AppColors, BorderRadius } from "@/constants/theme";
 import { Team, Player, Match, MatchFormat, MatchLocation } from "@/types";
@@ -36,10 +34,6 @@ type MatchSetupRouteProp = RouteProp<RootStackParamList, "MatchSetup">;
 type PlayerStatus = "starting" | "bench" | "notPlaying";
 
 const FORMATS: MatchFormat[] = ["5v5", "7v7", "9v9", "11v11"];
-const LOCATIONS: { key: MatchLocation; label: string }[] = [
-  { key: "home", label: "Home" },
-  { key: "away", label: "Away" },
-];
 
 interface DraggablePlayerProps {
   player: Player;
@@ -62,11 +56,10 @@ function DraggablePlayer({ player, status, onDrop, onTap, columnLayouts }: Dragg
 
   const handleDrop = (playerId: string, x: number) => {
     const startingLayout = columnLayouts.current.starting;
-    const benchLayout = columnLayouts.current.bench;
     
     if (startingLayout && x < startingLayout.width + 20) {
       onDrop(playerId, "starting");
-    } else if (benchLayout) {
+    } else {
       onDrop(playerId, "bench");
     }
   };
@@ -129,18 +122,12 @@ function DraggablePlayer({ player, status, onDrop, onTap, columnLayouts }: Dragg
           animatedStyle,
         ]}
       >
-        <View style={styles.dragHandle}>
-          <Feather name="menu" size={14} color="rgba(255,255,255,0.5)" />
-        </View>
-        <View style={styles.playerAvatar}>
-          <Feather name="user" size={14} color={AppColors.textSecondary} />
-        </View>
         <ThemedText
-          type="body"
+          type="small"
           numberOfLines={1}
           style={[styles.playerName, { color: textColor }]}
         >
-          {player.squadNumber ? `${player.squadNumber}. ` : ""}{player.name}
+          {player.squadNumber ? `${player.squadNumber}` : "-"}
         </ThemedText>
       </Animated.View>
     </GestureDetector>
@@ -195,7 +182,6 @@ export default function MatchSetupScreen() {
   const allPlayers = team?.players || [];
   const startingPlayers = allPlayers.filter((p) => playerStatuses[p.id] === "starting");
   const benchPlayers = allPlayers.filter((p) => playerStatuses[p.id] === "bench");
-  const notPlayingPlayers = allPlayers.filter((p) => playerStatuses[p.id] === "notPlaying");
 
   const getMaxPlayers = (f: MatchFormat) => {
     switch (f) {
@@ -334,64 +320,49 @@ export default function MatchSetupScreen() {
   }
 
   return (
-    <ScrollView
-      style={[styles.container, { backgroundColor: theme.backgroundRoot }]}
-      contentContainerStyle={[
-        styles.content,
+    <View
+      style={[
+        styles.container,
         {
-          paddingTop: headerHeight + Spacing.lg,
-          paddingBottom: insets.bottom + Spacing.xl,
+          backgroundColor: theme.backgroundRoot,
+          paddingTop: headerHeight + Spacing.md,
+          paddingBottom: insets.bottom + Spacing.md,
+          paddingHorizontal: Spacing.md,
         },
       ]}
     >
-      <Card elevation={2} style={styles.matchInfoCard}>
+      <View style={styles.topSection}>
         <View style={styles.inputRow}>
-          <ThemedText type="small" style={styles.inputLabel}>VS</ThemedText>
           <TextInput
             style={[styles.oppositionInput, { color: theme.text }]}
             value={opposition}
             onChangeText={setOpposition}
-            placeholder="Opposition team"
+            placeholder="Opposition"
             placeholderTextColor={AppColors.textDisabled}
-            maxLength={50}
+            maxLength={30}
           />
+          <View style={styles.locationButtons}>
+            <Pressable
+              style={[styles.locButton, location === "home" && styles.locButtonActive]}
+              onPress={() => { Haptics.selectionAsync(); setLocation("home"); }}
+            >
+              <ThemedText type="caption" style={location === "home" ? styles.locTextActive : styles.locText}>H</ThemedText>
+            </Pressable>
+            <Pressable
+              style={[styles.locButton, location === "away" && styles.locButtonActive]}
+              onPress={() => { Haptics.selectionAsync(); setLocation("away"); }}
+            >
+              <ThemedText type="caption" style={location === "away" ? styles.locTextActive : styles.locText}>A</ThemedText>
+            </Pressable>
+          </View>
         </View>
 
-        <View style={styles.optionsRow}>
-          <View style={styles.locationButtons}>
-            {LOCATIONS.map((loc) => (
-              <Pressable
-                key={loc.key}
-                style={[
-                  styles.optionButton,
-                  location === loc.key && styles.optionButtonActive,
-                ]}
-                onPress={() => {
-                  Haptics.selectionAsync();
-                  setLocation(loc.key);
-                }}
-              >
-                <ThemedText
-                  type="small"
-                  style={[
-                    styles.optionText,
-                    location === loc.key && styles.optionTextActive,
-                  ]}
-                >
-                  {loc.label}
-                </ThemedText>
-              </Pressable>
-            ))}
-          </View>
-
+        <View style={styles.settingsRow}>
           <View style={styles.formatButtons}>
             {FORMATS.map((f) => (
               <Pressable
                 key={f}
-                style={[
-                  styles.formatButton,
-                  format === f && styles.formatButtonActive,
-                ]}
+                style={[styles.formatButton, format === f && styles.formatButtonActive]}
                 onPress={() => {
                   Haptics.selectionAsync();
                   setFormat(f);
@@ -402,87 +373,51 @@ export default function MatchSetupScreen() {
                       .map(([id]) => id);
                     if (starting.length > max) {
                       const updated = { ...prev };
-                      starting.slice(max).forEach((id) => {
-                        updated[id] = "bench";
-                      });
+                      starting.slice(max).forEach((id) => { updated[id] = "bench"; });
                       return updated;
                     }
                     return prev;
                   });
                 }}
               >
-                <ThemedText
-                  type="caption"
-                  style={[
-                    styles.formatText,
-                    format === f && styles.formatTextActive,
-                  ]}
-                >
-                  {f}
-                </ThemedText>
+                <ThemedText type="caption" style={format === f ? styles.formatTextActive : styles.formatText}>{f}</ThemedText>
               </Pressable>
             ))}
           </View>
+          <View style={styles.timeInput}>
+            <Feather name="clock" size={14} color={AppColors.textSecondary} />
+            <TextInput
+              style={[styles.durationInput, { color: theme.text }]}
+              value={gameDuration}
+              onChangeText={(t) => setGameDuration(t.replace(/[^0-9]/g, ""))}
+              placeholder="60"
+              placeholderTextColor={AppColors.textDisabled}
+              keyboardType="number-pad"
+              maxLength={3}
+            />
+            <ThemedText type="caption" style={{ color: AppColors.textSecondary }}>m</ThemedText>
+          </View>
         </View>
-
-        <View style={styles.durationRow}>
-          <Feather name="clock" size={16} color={AppColors.textSecondary} />
-          <ThemedText type="small" style={styles.durationLabel}>
-            Game Time
-          </ThemedText>
-          <TextInput
-            style={[styles.durationInput, { color: theme.text }]}
-            value={gameDuration}
-            onChangeText={(text) => setGameDuration(text.replace(/[^0-9]/g, ""))}
-            placeholder="60"
-            placeholderTextColor={AppColors.textDisabled}
-            keyboardType="number-pad"
-            maxLength={3}
-          />
-          <ThemedText type="small" style={styles.durationUnit}>
-            mins
-          </ThemedText>
-        </View>
-      </Card>
-
-      <ThemedText type="caption" style={styles.hint}>
-        Drag players between columns or tap to move
-      </ThemedText>
+      </View>
 
       {allPlayers.length > 0 ? (
         <View style={styles.columnsContainer}>
           <View
             style={styles.column}
-            onLayout={(e) => {
-              columnLayouts.current.starting = e.nativeEvent.layout;
-            }}
+            onLayout={(e) => { columnLayouts.current.starting = e.nativeEvent.layout; }}
           >
             <View style={styles.columnHeader}>
-              <Feather name="play" size={18} color={AppColors.pitchGreen} />
-              <ThemedText type="h4" style={{ color: AppColors.pitchGreen }}>
-                Starting
-              </ThemedText>
-              <ThemedText type="caption" style={styles.countBadge}>
-                {startingPlayers.length}/{maxPlayers}
-              </ThemedText>
+              <Feather name="play" size={14} color={AppColors.pitchGreen} />
+              <ThemedText type="small" style={{ color: AppColors.pitchGreen }}>Starting</ThemedText>
+              <ThemedText type="caption" style={styles.countBadge}>{startingPlayers.length}/{maxPlayers}</ThemedText>
             </View>
             <View style={styles.playersList}>
               {startingPlayers.map((p) => (
-                <DraggablePlayer
-                  key={p.id}
-                  player={p}
-                  status="starting"
-                  onDrop={handleDrop}
-                  onTap={handleTap}
-                  columnLayouts={columnLayouts}
-                />
+                <DraggablePlayer key={p.id} player={p} status="starting" onDrop={handleDrop} onTap={handleTap} columnLayouts={columnLayouts} />
               ))}
               {startingPlayers.length === 0 ? (
                 <View style={styles.emptyColumn}>
-                  <Feather name="arrow-left" size={20} color={AppColors.textDisabled} />
-                  <ThemedText type="small" style={{ color: AppColors.textDisabled, textAlign: "center" }}>
-                    Drag or tap players here
-                  </ThemedText>
+                  <ThemedText type="caption" style={{ color: AppColors.textDisabled }}>Tap to add</ThemedText>
                 </View>
               ) : null}
             </View>
@@ -490,71 +425,27 @@ export default function MatchSetupScreen() {
 
           <View
             style={styles.column}
-            onLayout={(e) => {
-              columnLayouts.current.bench = e.nativeEvent.layout;
-            }}
+            onLayout={(e) => { columnLayouts.current.bench = e.nativeEvent.layout; }}
           >
             <View style={styles.columnHeader}>
-              <Feather name="users" size={18} color="#2196F3" />
-              <ThemedText type="h4" style={{ color: "#2196F3" }}>
-                On Bench
-              </ThemedText>
-              <ThemedText type="caption" style={styles.countBadge}>
-                {benchPlayers.length}
-              </ThemedText>
+              <Feather name="users" size={14} color="#2196F3" />
+              <ThemedText type="small" style={{ color: "#2196F3" }}>Bench</ThemedText>
+              <ThemedText type="caption" style={styles.countBadge}>{benchPlayers.length}</ThemedText>
             </View>
             <View style={styles.playersList}>
               {benchPlayers.map((p) => (
-                <DraggablePlayer
-                  key={p.id}
-                  player={p}
-                  status="bench"
-                  onDrop={handleDrop}
-                  onTap={handleTap}
-                  columnLayouts={columnLayouts}
-                />
+                <DraggablePlayer key={p.id} player={p} status="bench" onDrop={handleDrop} onTap={handleTap} columnLayouts={columnLayouts} />
               ))}
             </View>
-
-            {notPlayingPlayers.length > 0 ? (
-              <>
-                <View style={[styles.columnHeader, { marginTop: Spacing.lg }]}>
-                  <Feather name="x" size={18} color={AppColors.textSecondary} />
-                  <ThemedText type="body" style={{ color: AppColors.textSecondary }}>
-                    Not Playing
-                  </ThemedText>
-                  <ThemedText type="caption" style={styles.countBadge}>
-                    {notPlayingPlayers.length}
-                  </ThemedText>
-                </View>
-                <View style={styles.playersList}>
-                  {notPlayingPlayers.map((p) => (
-                    <DraggablePlayer
-                      key={p.id}
-                      player={p}
-                      status="notPlaying"
-                      onDrop={handleDrop}
-                      onTap={handleTap}
-                      columnLayouts={columnLayouts}
-                    />
-                  ))}
-                </View>
-              </>
-            ) : null}
           </View>
         </View>
       ) : (
-        <Card elevation={2} style={styles.emptyCard}>
+        <View style={styles.emptyCard}>
           <Feather name="alert-circle" size={24} color={AppColors.warningYellow} />
-          <ThemedText type="body" style={{ color: AppColors.textSecondary }}>
-            No players in squad
-          </ThemedText>
-          <ThemedText type="small" style={{ color: AppColors.textSecondary }}>
-            Go back to add players to your team first
-          </ThemedText>
-        </Card>
+          <ThemedText type="body" style={{ color: AppColors.textSecondary }}>No players in squad</ThemedText>
+        </View>
       )}
-    </ScrollView>
+    </View>
   );
 }
 
@@ -562,70 +453,64 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  content: {
-    paddingHorizontal: Spacing.md,
-  },
   loadingContainer: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
   },
-  matchInfoCard: {
-    padding: Spacing.md,
-    marginBottom: Spacing.sm,
+  topSection: {
+    marginBottom: Spacing.md,
   },
   inputRow: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: Spacing.md,
-  },
-  inputLabel: {
-    color: AppColors.textSecondary,
-    marginRight: Spacing.sm,
-    fontWeight: "600",
+    gap: Spacing.sm,
+    marginBottom: Spacing.sm,
   },
   oppositionInput: {
     flex: 1,
     height: 40,
-    backgroundColor: AppColors.elevated,
+    backgroundColor: AppColors.surface,
     borderRadius: BorderRadius.sm,
     paddingHorizontal: Spacing.md,
     fontSize: 16,
   },
-  optionsRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    gap: Spacing.md,
-    marginBottom: Spacing.md,
-  },
   locationButtons: {
     flexDirection: "row",
-    gap: Spacing.xs,
+    gap: 4,
   },
-  optionButton: {
-    paddingVertical: Spacing.sm,
-    paddingHorizontal: Spacing.md,
-    backgroundColor: AppColors.elevated,
+  locButton: {
+    width: 36,
+    height: 40,
+    backgroundColor: AppColors.surface,
     borderRadius: BorderRadius.sm,
+    justifyContent: "center",
+    alignItems: "center",
   },
-  optionButtonActive: {
+  locButtonActive: {
     backgroundColor: AppColors.pitchGreen,
   },
-  optionText: {
+  locText: {
     color: AppColors.textSecondary,
+    fontWeight: "600",
   },
-  optionTextActive: {
+  locTextActive: {
     color: "#FFFFFF",
     fontWeight: "600",
   },
+  settingsRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
   formatButtons: {
     flexDirection: "row",
-    gap: Spacing.xs,
+    gap: 4,
   },
   formatButton: {
-    paddingVertical: Spacing.sm,
+    paddingVertical: Spacing.xs,
     paddingHorizontal: Spacing.sm,
-    backgroundColor: AppColors.elevated,
+    backgroundColor: AppColors.surface,
     borderRadius: BorderRadius.sm,
   },
   formatButtonActive: {
@@ -638,34 +523,23 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontWeight: "600",
   },
-  durationRow: {
+  timeInput: {
     flexDirection: "row",
     alignItems: "center",
-    gap: Spacing.sm,
-  },
-  durationLabel: {
-    color: AppColors.textSecondary,
+    gap: 4,
+    backgroundColor: AppColors.surface,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: Spacing.xs,
+    borderRadius: BorderRadius.sm,
   },
   durationInput: {
-    width: 60,
-    height: 36,
-    backgroundColor: AppColors.elevated,
-    borderRadius: BorderRadius.sm,
-    paddingHorizontal: Spacing.sm,
-    fontSize: 16,
+    width: 36,
+    fontSize: 14,
     textAlign: "center",
     fontWeight: "600",
   },
-  durationUnit: {
-    color: AppColors.textSecondary,
-  },
-  hint: {
-    color: AppColors.textDisabled,
-    textAlign: "center",
-    marginBottom: Spacing.md,
-    fontStyle: "italic",
-  },
   columnsContainer: {
+    flex: 1,
     flexDirection: "row",
     gap: Spacing.sm,
   },
@@ -675,54 +549,43 @@ const styles = StyleSheet.create({
   columnHeader: {
     flexDirection: "row",
     alignItems: "center",
-    gap: Spacing.xs,
-    marginBottom: Spacing.sm,
-    paddingHorizontal: Spacing.xs,
+    gap: 4,
+    marginBottom: Spacing.xs,
   },
   countBadge: {
     color: AppColors.textSecondary,
     marginLeft: "auto",
   },
   playersList: {
-    gap: Spacing.xs,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
   },
   playerCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: Spacing.sm,
-    borderRadius: BorderRadius.sm,
-    minHeight: 48,
-  },
-  dragHandle: {
-    marginRight: Spacing.xs,
-  },
-  playerAvatar: {
-    width: 26,
-    height: 26,
-    borderRadius: 4,
-    backgroundColor: "rgba(255,255,255,0.2)",
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     justifyContent: "center",
     alignItems: "center",
-    marginRight: Spacing.sm,
   },
   playerName: {
-    flex: 1,
-    fontWeight: "600",
+    fontWeight: "700",
     fontSize: 14,
   },
   emptyColumn: {
-    padding: Spacing.lg,
+    padding: Spacing.md,
     alignItems: "center",
     backgroundColor: AppColors.surface,
     borderRadius: BorderRadius.sm,
-    borderWidth: 2,
+    borderWidth: 1,
     borderColor: AppColors.pitchGreen,
     borderStyle: "dashed",
-    gap: Spacing.sm,
+    width: "100%",
   },
   emptyCard: {
-    padding: Spacing.xl,
+    flex: 1,
+    justifyContent: "center",
     alignItems: "center",
-    gap: Spacing.sm,
+    gap: Spacing.md,
   },
 });
