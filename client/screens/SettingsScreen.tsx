@@ -1,0 +1,267 @@
+import React, { useState, useCallback } from "react";
+import { View, StyleSheet, Image, Pressable, Switch, ScrollView } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useHeaderHeight } from "@react-navigation/elements";
+import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
+import { useFocusEffect } from "@react-navigation/native";
+import { Feather } from "@expo/vector-icons";
+import * as Haptics from "expo-haptics";
+
+import { ThemedText } from "@/components/ThemedText";
+import { Card } from "@/components/Card";
+import { useTheme } from "@/hooks/useTheme";
+import { Spacing, AppColors, BorderRadius } from "@/constants/theme";
+import { SubscriptionState } from "@/types";
+import { getSubscription, saveSubscription } from "@/lib/storage";
+
+export default function SettingsScreen() {
+  const insets = useSafeAreaInsets();
+  const headerHeight = useHeaderHeight();
+  const tabBarHeight = useBottomTabBarHeight();
+  const { theme } = useTheme();
+
+  const [subscription, setSubscription] = useState<SubscriptionState>({
+    isPremium: false,
+    maxTeams: 1,
+  });
+  const [loading, setLoading] = useState(true);
+
+  const loadData = useCallback(async () => {
+    try {
+      const subData = await getSubscription();
+      setSubscription(subData);
+    } catch (error) {
+      console.error("Error loading subscription:", error);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [loadData])
+  );
+
+  const handleUpgrade = useCallback(async () => {
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    const newSub = { isPremium: true, maxTeams: 999 };
+    await saveSubscription(newSub);
+    setSubscription(newSub);
+  }, []);
+
+  const handleDowngrade = useCallback(async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    const newSub = { isPremium: false, maxTeams: 1 };
+    await saveSubscription(newSub);
+    setSubscription(newSub);
+  }, []);
+
+  return (
+    <ScrollView
+      style={[styles.container, { backgroundColor: theme.backgroundRoot }]}
+      contentContainerStyle={[
+        styles.content,
+        {
+          paddingTop: headerHeight + Spacing.xl,
+          paddingBottom: tabBarHeight + Spacing.xl,
+        },
+      ]}
+      scrollIndicatorInsets={{ bottom: insets.bottom }}
+    >
+      <Card elevation={2} style={styles.profileCard}>
+        <View style={styles.profileContent}>
+          <Image
+            source={require("../../assets/images/profile-avatar.png")}
+            style={styles.avatar}
+            resizeMode="cover"
+          />
+          <View style={styles.profileInfo}>
+            <ThemedText type="h4">Manager</ThemedText>
+            <ThemedText type="small" style={{ color: AppColors.textSecondary }}>
+              {subscription.isPremium ? "Premium Member" : "Free Plan"}
+            </ThemedText>
+          </View>
+        </View>
+      </Card>
+
+      <ThemedText type="small" style={styles.sectionTitle}>
+        SUBSCRIPTION
+      </ThemedText>
+
+      <Card elevation={2} style={styles.subscriptionCard}>
+        <View style={styles.subscriptionHeader}>
+          <View style={styles.planInfo}>
+            <Feather
+              name={subscription.isPremium ? "star" : "zap"}
+              size={24}
+              color={subscription.isPremium ? AppColors.warningYellow : AppColors.pitchGreen}
+            />
+            <View style={styles.planText}>
+              <ThemedText type="h4">
+                {subscription.isPremium ? "Premium" : "Free Plan"}
+              </ThemedText>
+              <ThemedText type="small" style={{ color: AppColors.textSecondary }}>
+                {subscription.isPremium
+                  ? "Unlimited teams"
+                  : "1 team maximum"}
+              </ThemedText>
+            </View>
+          </View>
+        </View>
+
+        {subscription.isPremium ? (
+          <Pressable
+            style={({ pressed }) => [
+              styles.manageButton,
+              { opacity: pressed ? 0.8 : 1 },
+            ]}
+            onPress={handleDowngrade}
+          >
+            <ThemedText type="body" style={{ color: AppColors.textSecondary }}>
+              Cancel Subscription
+            </ThemedText>
+          </Pressable>
+        ) : (
+          <View style={styles.upgradeContainer}>
+            <View style={styles.featureList}>
+              <View style={styles.featureItem}>
+                <Feather name="check" size={16} color={AppColors.pitchGreen} />
+                <ThemedText type="small">Unlimited teams</ThemedText>
+              </View>
+              <View style={styles.featureItem}>
+                <Feather name="check" size={16} color={AppColors.pitchGreen} />
+                <ThemedText type="small">Full match history</ThemedText>
+              </View>
+              <View style={styles.featureItem}>
+                <Feather name="check" size={16} color={AppColors.pitchGreen} />
+                <ThemedText type="small">Player statistics</ThemedText>
+              </View>
+            </View>
+
+            <Pressable
+              style={({ pressed }) => [
+                styles.upgradeButton,
+                { opacity: pressed ? 0.8 : 1 },
+              ]}
+              onPress={handleUpgrade}
+            >
+              <ThemedText type="button" style={styles.upgradeButtonText}>
+                Upgrade to Premium
+              </ThemedText>
+            </Pressable>
+          </View>
+        )}
+      </Card>
+
+      <ThemedText type="small" style={styles.sectionTitle}>
+        ABOUT
+      </ThemedText>
+
+      <Card elevation={2} style={styles.aboutCard}>
+        <View style={styles.aboutItem}>
+          <ThemedText type="body">Version</ThemedText>
+          <ThemedText type="body" style={{ color: AppColors.textSecondary }}>
+            1.0.0
+          </ThemedText>
+        </View>
+        <View style={styles.divider} />
+        <View style={styles.aboutItem}>
+          <ThemedText type="body">Build</ThemedText>
+          <ThemedText type="body" style={{ color: AppColors.textSecondary }}>
+            MVP
+          </ThemedText>
+        </View>
+      </Card>
+    </ScrollView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+  content: {
+    paddingHorizontal: Spacing.lg,
+  },
+  profileCard: {
+    padding: Spacing.lg,
+    marginBottom: Spacing.xl,
+  },
+  profileContent: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  avatar: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    marginRight: Spacing.lg,
+    backgroundColor: AppColors.surface,
+  },
+  profileInfo: {
+    flex: 1,
+  },
+  sectionTitle: {
+    color: AppColors.textSecondary,
+    marginBottom: Spacing.md,
+    marginLeft: Spacing.xs,
+  },
+  subscriptionCard: {
+    padding: Spacing.lg,
+    marginBottom: Spacing.xl,
+  },
+  subscriptionHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  planInfo: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  planText: {
+    marginLeft: Spacing.md,
+  },
+  manageButton: {
+    marginTop: Spacing.lg,
+    alignItems: "center",
+  },
+  upgradeContainer: {
+    marginTop: Spacing.lg,
+    borderTopWidth: 1,
+    borderTopColor: AppColors.elevated,
+    paddingTop: Spacing.lg,
+  },
+  featureList: {
+    marginBottom: Spacing.lg,
+  },
+  featureItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+    marginBottom: Spacing.sm,
+  },
+  upgradeButton: {
+    backgroundColor: AppColors.pitchGreen,
+    paddingVertical: Spacing.md,
+    borderRadius: BorderRadius.md,
+    alignItems: "center",
+  },
+  upgradeButtonText: {
+    color: "#FFFFFF",
+  },
+  aboutCard: {
+    padding: Spacing.lg,
+  },
+  aboutItem: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  divider: {
+    height: 1,
+    backgroundColor: AppColors.elevated,
+    marginVertical: Spacing.md,
+  },
+});
