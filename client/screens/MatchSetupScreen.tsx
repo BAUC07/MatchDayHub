@@ -40,7 +40,6 @@ const LOCATIONS: { key: MatchLocation; label: string }[] = [
   { key: "home", label: "Home" },
   { key: "away", label: "Away" },
 ];
-const GAME_DURATIONS = [20, 25, 30, 40, 45, 60, 70, 80, 90];
 
 interface DraggablePlayerProps {
   player: Player;
@@ -159,7 +158,7 @@ export default function MatchSetupScreen() {
   const [opposition, setOpposition] = useState("");
   const [location, setLocation] = useState<MatchLocation>("home");
   const [format, setFormat] = useState<MatchFormat>("11v11");
-  const [gameDuration, setGameDuration] = useState(60);
+  const [gameDuration, setGameDuration] = useState("60");
   const [playerStatuses, setPlayerStatuses] = useState<Record<string, PlayerStatus>>({});
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
@@ -274,7 +273,7 @@ export default function MatchSetupScreen() {
         isCompleted: false,
         totalMatchTime: 0,
         addedTime: 0,
-        plannedDuration: gameDuration,
+        plannedDuration: parseInt(gameDuration, 10) || 60,
       };
 
       await saveMatch(match);
@@ -431,35 +430,18 @@ export default function MatchSetupScreen() {
           <ThemedText type="small" style={styles.durationLabel}>
             Game Time
           </ThemedText>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.durationOptions}
-          >
-            {GAME_DURATIONS.map((mins) => (
-              <Pressable
-                key={mins}
-                style={[
-                  styles.durationButton,
-                  gameDuration === mins && styles.durationButtonActive,
-                ]}
-                onPress={() => {
-                  Haptics.selectionAsync();
-                  setGameDuration(mins);
-                }}
-              >
-                <ThemedText
-                  type="small"
-                  style={[
-                    styles.durationText,
-                    gameDuration === mins && styles.durationTextActive,
-                  ]}
-                >
-                  {mins}m
-                </ThemedText>
-              </Pressable>
-            ))}
-          </ScrollView>
+          <TextInput
+            style={[styles.durationInput, { color: theme.text }]}
+            value={gameDuration}
+            onChangeText={(text) => setGameDuration(text.replace(/[^0-9]/g, ""))}
+            placeholder="60"
+            placeholderTextColor={AppColors.textDisabled}
+            keyboardType="number-pad"
+            maxLength={3}
+          />
+          <ThemedText type="small" style={styles.durationUnit}>
+            mins
+          </ThemedText>
         </View>
       </Card>
 
@@ -664,26 +646,18 @@ const styles = StyleSheet.create({
   durationLabel: {
     color: AppColors.textSecondary,
   },
-  durationOptions: {
-    flexDirection: "row",
-    gap: Spacing.xs,
-    paddingRight: Spacing.md,
-  },
-  durationButton: {
-    paddingVertical: Spacing.xs,
-    paddingHorizontal: Spacing.md,
+  durationInput: {
+    width: 60,
+    height: 36,
     backgroundColor: AppColors.elevated,
     borderRadius: BorderRadius.sm,
-  },
-  durationButtonActive: {
-    backgroundColor: AppColors.pitchGreen,
-  },
-  durationText: {
-    color: AppColors.textSecondary,
-  },
-  durationTextActive: {
-    color: "#FFFFFF",
+    paddingHorizontal: Spacing.sm,
+    fontSize: 16,
+    textAlign: "center",
     fontWeight: "600",
+  },
+  durationUnit: {
+    color: AppColors.textSecondary,
   },
   hint: {
     color: AppColors.textDisabled,
