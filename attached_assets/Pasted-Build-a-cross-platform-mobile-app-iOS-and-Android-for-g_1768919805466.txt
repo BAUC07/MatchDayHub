@@ -1,0 +1,207 @@
+Build a cross-platform mobile app (iOS and Android) for grassroots football managers to log match activity in real time. This is a pitch-side tool designed for fast, one-handed use under pressure.
+
+Platform & Tech
+	•	Target platforms:
+	•	iOS (iPhone)
+	•	Android
+	•	Use a single cross-platform framework (prefer Flutter or React Native)
+	•	Local data persistence only (offline-first)
+	•	No backend required for MVP
+	•	Architecture must support future analytics and reporting features
+
+⸻
+
+Core Concept
+
+Managers can manage multiple teams and log live match events accurately as they happen. During match play, all core actions must fit on a single screen with no scrolling.
+
+All data captured must be stored in a structured way so it can be reused later for match statistics, trends, and performance analysis in future iterations.
+
+⸻
+
+Subscription Logic
+	•	Free version:
+	•	Maximum of 1 team
+	•	Paid version:
+	•	Unlimited teams
+	•	Implement subscription logic using a simple abstraction (mock or stub acceptable)
+
+⸻
+
+Team & Squad Management
+
+For each team:
+	•	Create and manage squads
+	•	Players have:
+	•	Name
+	•	Squad number (optional)
+	•	Player states:
+	•	Starting
+	•	Substitute
+	•	Unavailable
+
+⸻
+
+Match Setup
+
+Before kickoff, the manager must be able to:
+	•	Select team
+	•	Enter opposition team name (free text)
+	•	Select match location:
+	•	Home
+	•	Away
+	•	Select match format:
+	•	5v5
+	•	7v7
+	•	9v9
+	•	11v11
+	•	Select starting lineup using drag and drop from the squad
+	•	Assign remaining players as substitutes or unavailable
+
+All match metadata (opposition, home/away, format, date, team) must be saved with the match record.
+
+⸻
+
+Match View – Single Screen, No Scroll (Critical)
+
+The live match screen must be fully usable on one screen, with no vertical or horizontal scrolling. The layout is fixed and divided into three vertical zones:
+
+1. Top Bar – Awareness Zone (Fixed)
+	•	Scoreline (your team vs opposition)
+	•	Match clock (clearly showing added time when applicable)
+	•	Pause / resume control (protected against accidental taps)
+
+2. Middle Zone – Pitch & Players
+	•	Simplified pitch diagram
+	•	On-pitch players shown as circles with shirt number or initials
+	•	Substitutes shown in a compact bench strip within the same screen
+	•	Tapping a player opens a quick action sheet:
+	•	Goal
+	•	Assist
+	•	Yellow card
+	•	Red card
+	•	Sub off
+	•	Drag-and-drop supported for substitutions
+
+This zone provides visual context only and should not scroll.
+
+3. Bottom Action Bar – Event Logging (Fixed)
+
+Always visible. Large tap targets.
+
+Buttons:
+	•	GOAL +
+	•	GOAL –
+	•	CARD
+	•	SUB
+	•	PENALTY
+
+Tapping a button opens a bottom sheet (not a new screen) to capture:
+	•	Player(s) involved
+	•	Event type (where applicable)
+	•	Confirmation
+
+⸻
+
+Match Clock
+	•	Start match button starts the clock
+	•	Clock runs continuously
+	•	Pause and resume supported
+	•	Ability to add additional time at end of halves
+	•	All events are automatically timestamped using match time
+
+⸻
+
+Live Match Event Logging
+
+Support logging of:
+
+Goals Scored
+	•	Select scorer
+	•	Optional assist
+	•	Goal type:
+	•	Open play
+	•	Corner
+	•	Free kick
+
+Goals Conceded
+	•	Goal type:
+	•	Open play
+	•	Corner
+	•	Free kick
+
+Discipline
+	•	Yellow card
+	•	Red card
+	•	Assigned to a player
+
+Penalties
+	•	Penalty for team
+	•	Penalty against team
+	•	Optional outcome (scored / missed)
+
+Substitutions
+	•	Player off
+	•	Player on
+
+All events:
+	•	Are timestamped
+	•	Can be edited
+	•	Allow undo of the most recent action
+	•	Are stored in a structured format suitable for future analysis
+
+⸻
+
+Timeline Access (During Match)
+	•	Timeline accessible via:
+	•	A small icon in the top bar, or
+	•	A swipe gesture
+	•	Timeline opens as an overlay or bottom sheet
+	•	Displays chronological list of events with edit/delete options
+
+⸻
+
+End of Match Summary
+
+At full time:
+	•	Display a visual timeline:
+	•	Horizontal time axis
+	•	Icons for goals, cards, penalties, substitutions
+	•	Summary includes:
+	•	Final score
+	•	Cards count
+	•	Penalties
+
+⸻
+
+Data & Future-Proofing (Important)
+
+All data must be stored in a way that supports future features such as:
+	•	Player statistics (goals, assists, cards, minutes played)
+	•	Team trends over time
+	•	Home vs away performance
+	•	Discipline trends
+	•	Set-piece vs open-play goals
+	•	Match comparisons across seasons
+
+Design data models with extensibility in mind, even if analytics are not shown in the MVP UI.
+
+⸻
+
+UX Principles (Non-Negotiable)
+	•	No scrolling during live match logging
+	•	Large tap targets
+	•	Minimal typing during matches
+	•	Clear visual and haptic feedback when events are logged
+	•	Designed for cold, wet, high-pressure environments
+
+⸻
+
+Deliverables
+	•	Working cross-platform mobile app (iOS + Android)
+	•	Clean, modular codebase
+	•	Well-defined data models
+	•	Comments explaining key architectural decisions
+	•	Clear extension points for future analytics, backend sync, and reporting
+
+Prioritise speed, clarity, and reliability over visual polish. This app should feel like something a grassroots manager would genuinely trust on the touchline.
