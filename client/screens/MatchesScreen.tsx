@@ -5,6 +5,8 @@ import {
   StyleSheet,
   Image,
   RefreshControl,
+  Pressable,
+  Modal,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
@@ -36,6 +38,7 @@ export default function MatchesScreen() {
   const [teams, setTeams] = useState<Team[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [showTeamPicker, setShowTeamPicker] = useState(false);
 
   const loadData = useCallback(async () => {
     try {
@@ -76,6 +79,26 @@ export default function MatchesScreen() {
     [navigation]
   );
 
+  const handleNewMatch = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (teams.length === 0) {
+      return;
+    } else if (teams.length === 1) {
+      navigation.navigate("MatchSetup", { teamId: teams[0].id });
+    } else {
+      setShowTeamPicker(true);
+    }
+  }, [teams, navigation]);
+
+  const handleSelectTeam = useCallback(
+    (team: Team) => {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      setShowTeamPicker(false);
+      navigation.navigate("MatchSetup", { teamId: team.id });
+    },
+    [navigation]
+  );
+
   const getTeamName = useCallback(
     (teamId: string) => {
       const team = teams.find((t) => t.id === teamId);
@@ -96,6 +119,44 @@ export default function MatchesScreen() {
         return AppColors.textSecondary;
     }
   };
+
+  const renderNewMatchCard = useCallback(
+    () => (
+      <Pressable
+        style={({ pressed }) => [
+          styles.newMatchCard,
+          { opacity: pressed ? 0.8 : 1 },
+          teams.length === 0 && styles.newMatchCardDisabled,
+        ]}
+        onPress={handleNewMatch}
+        disabled={teams.length === 0}
+      >
+        <View style={styles.newMatchIcon}>
+          <Feather
+            name="play-circle"
+            size={28}
+            color={teams.length > 0 ? AppColors.pitchGreen : AppColors.textDisabled}
+          />
+        </View>
+        <View style={styles.newMatchText}>
+          <ThemedText
+            type="h4"
+            style={{
+              color: teams.length > 0 ? theme.text : AppColors.textDisabled,
+            }}
+          >
+            Start New Match
+          </ThemedText>
+          <ThemedText type="small" style={{ color: AppColors.textSecondary }}>
+            {teams.length > 0
+              ? "Log a new match in real-time"
+              : "Create a team first to start a match"}
+          </ThemedText>
+        </View>
+      </Pressable>
+    ),
+    [teams.length, handleNewMatch, theme.text]
+  );
 
   const renderMatchCard = useCallback(
     ({ item }: { item: Match }) => {
@@ -182,7 +243,7 @@ export default function MatchesScreen() {
           No Matches Yet
         </ThemedText>
         <ThemedText type="body" style={styles.emptyText}>
-          Start a match from your team's page to begin logging
+          Start your first match to begin logging
         </ThemedText>
       </View>
     ),
@@ -207,30 +268,81 @@ export default function MatchesScreen() {
   }
 
   return (
-    <FlatList
-      style={[styles.container, { backgroundColor: theme.backgroundRoot }]}
-      contentContainerStyle={[
-        styles.listContent,
-        {
-          paddingTop: headerHeight + Spacing.xl,
-          paddingBottom: tabBarHeight + Spacing.xl,
-        },
-        matches.length === 0 && styles.emptyListContent,
-      ]}
-      scrollIndicatorInsets={{ bottom: insets.bottom }}
-      data={matches}
-      keyExtractor={(item) => item.id}
-      renderItem={renderMatchCard}
-      ListEmptyComponent={renderEmptyState}
-      refreshControl={
-        <RefreshControl
-          refreshing={refreshing}
-          onRefresh={handleRefresh}
-          tintColor={AppColors.pitchGreen}
-        />
-      }
-      ItemSeparatorComponent={() => <View style={styles.separator} />}
-    />
+    <>
+      <FlatList
+        style={[styles.container, { backgroundColor: theme.backgroundRoot }]}
+        contentContainerStyle={[
+          styles.listContent,
+          {
+            paddingTop: headerHeight + Spacing.xl,
+            paddingBottom: tabBarHeight + Spacing.xl,
+          },
+        ]}
+        scrollIndicatorInsets={{ bottom: insets.bottom }}
+        data={matches}
+        keyExtractor={(item) => item.id}
+        renderItem={renderMatchCard}
+        ListHeaderComponent={
+          <>
+            {renderNewMatchCard()}
+            {matches.length === 0 ? renderEmptyState() : null}
+          </>
+        }
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor={AppColors.pitchGreen}
+          />
+        }
+        ItemSeparatorComponent={() => <View style={styles.separator} />}
+      />
+
+      <Modal
+        visible={showTeamPicker}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowTeamPicker(false)}
+      >
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => setShowTeamPicker(false)}
+        >
+          <View />
+        </Pressable>
+        <View style={[styles.modalSheet, { paddingBottom: insets.bottom + Spacing.lg }]}>
+          <View style={styles.modalHandle} />
+          <ThemedText type="h4" style={styles.modalTitle}>
+            Select Team
+          </ThemedText>
+          <FlatList
+            data={teams}
+            keyExtractor={(item) => item.id}
+            renderItem={({ item }) => (
+              <Pressable
+                style={({ pressed }) => [
+                  styles.teamOption,
+                  { opacity: pressed ? 0.8 : 1 },
+                ]}
+                onPress={() => handleSelectTeam(item)}
+              >
+                <View style={styles.teamOptionIcon}>
+                  <Feather name="shield" size={24} color={AppColors.pitchGreen} />
+                </View>
+                <View style={styles.teamOptionInfo}>
+                  <ThemedText type="body">{item.name}</ThemedText>
+                  <ThemedText type="caption" style={{ color: AppColors.textSecondary }}>
+                    {item.players.length} players
+                  </ThemedText>
+                </View>
+                <Feather name="chevron-right" size={20} color={AppColors.textSecondary} />
+              </Pressable>
+            )}
+            ItemSeparatorComponent={() => <View style={styles.teamSeparator} />}
+          />
+        </View>
+      </Modal>
+    </>
   );
 }
 
@@ -241,14 +353,36 @@ const styles = StyleSheet.create({
   listContent: {
     paddingHorizontal: Spacing.lg,
   },
-  emptyListContent: {
-    flexGrow: 1,
-    justifyContent: "center",
-  },
   loadingContainer: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
+  },
+  newMatchCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: AppColors.surface,
+    borderRadius: BorderRadius["2xl"],
+    padding: Spacing.lg,
+    marginBottom: Spacing.xl,
+    borderWidth: 2,
+    borderColor: AppColors.pitchGreen,
+    borderStyle: "dashed",
+  },
+  newMatchCardDisabled: {
+    borderColor: AppColors.textDisabled,
+  },
+  newMatchIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: BorderRadius.md,
+    backgroundColor: AppColors.elevated,
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: Spacing.lg,
+  },
+  newMatchText: {
+    flex: 1,
   },
   matchCard: {
     padding: Spacing.lg,
@@ -308,6 +442,7 @@ const styles = StyleSheet.create({
   emptyContainer: {
     alignItems: "center",
     paddingHorizontal: Spacing.xl,
+    paddingTop: Spacing["3xl"],
   },
   emptyImage: {
     width: 160,
@@ -322,5 +457,50 @@ const styles = StyleSheet.create({
   emptyText: {
     textAlign: "center",
     color: AppColors.textSecondary,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+  },
+  modalSheet: {
+    backgroundColor: AppColors.surface,
+    borderTopLeftRadius: BorderRadius.lg,
+    borderTopRightRadius: BorderRadius.lg,
+    paddingTop: Spacing.md,
+    paddingHorizontal: Spacing.lg,
+    maxHeight: "50%",
+  },
+  modalHandle: {
+    width: 40,
+    height: 4,
+    backgroundColor: AppColors.textDisabled,
+    borderRadius: 2,
+    alignSelf: "center",
+    marginBottom: Spacing.lg,
+  },
+  modalTitle: {
+    textAlign: "center",
+    marginBottom: Spacing.lg,
+  },
+  teamOption: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: Spacing.md,
+  },
+  teamOptionIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: BorderRadius.sm,
+    backgroundColor: AppColors.elevated,
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: Spacing.md,
+  },
+  teamOptionInfo: {
+    flex: 1,
+  },
+  teamSeparator: {
+    height: 1,
+    backgroundColor: AppColors.elevated,
   },
 });
