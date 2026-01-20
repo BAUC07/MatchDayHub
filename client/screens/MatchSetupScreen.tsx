@@ -5,7 +5,6 @@ import {
   TextInput,
   Pressable,
   ScrollView,
-  FlatList,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
@@ -26,6 +25,8 @@ import { RootStackParamList } from "@/navigation/RootStackNavigator";
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 type MatchSetupRouteProp = RouteProp<RootStackParamList, "MatchSetup">;
 
+type PlayerStatus = "starting" | "bench" | "notPlaying";
+
 const FORMATS: MatchFormat[] = ["5v5", "7v7", "9v9", "11v11"];
 const LOCATIONS: { key: MatchLocation; label: string }[] = [
   { key: "home", label: "Home" },
@@ -43,14 +44,21 @@ export default function MatchSetupScreen() {
   const [opposition, setOpposition] = useState("");
   const [location, setLocation] = useState<MatchLocation>("home");
   const [format, setFormat] = useState<MatchFormat>("11v11");
-  const [startingIds, setStartingIds] = useState<Set<string>>(new Set());
+  const [playerStatuses, setPlayerStatuses] = useState<Record<string, PlayerStatus>>({});
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
 
   const loadTeam = useCallback(async () => {
     try {
       const teamData = await getTeam(route.params.teamId);
-      setTeam(teamData);
+      if (teamData) {
+        setTeam(teamData);
+        const initialStatuses: Record<string, PlayerStatus> = {};
+        teamData.players.forEach((p) => {
+          initialStatuses[p.id] = "bench";
+        });
+        setPlayerStatuses(initialStatuses);
+      }
     } catch (error) {
       console.error("Error loading team:", error);
     } finally {
@@ -65,8 +73,9 @@ export default function MatchSetupScreen() {
   );
 
   const allPlayers = team?.players || [];
-  const startingPlayers = allPlayers.filter((p) => startingIds.has(p.id));
-  const substitutes = allPlayers.filter((p) => !startingIds.has(p.id));
+  const startingPlayers = allPlayers.filter((p) => playerStatuses[p.id] === "starting");
+  const benchPlayers = allPlayers.filter((p) => playerStatuses[p.id] === "bench");
+  const notPlayingPlayers = allPlayers.filter((p) => playerStatuses[p.id] === "notPlaying");
 
   const getMaxPlayers = (f: MatchFormat) => {
     switch (f) {
@@ -78,24 +87,41 @@ export default function MatchSetupScreen() {
   };
 
   const maxPlayers = getMaxPlayers(format);
-  const isValid = opposition.trim().length >= 1 && startingIds.size > 0;
+  const isValid = opposition.trim().length >= 1 && startingPlayers.length > 0;
 
-  const togglePlayerSelection = useCallback((playerId: string) => {
-    Haptics.selectionAsync();
-    setStartingIds((prev) => {
-      const newSet = new Set(prev);
-      if (newSet.has(playerId)) {
-        newSet.delete(playerId);
-      } else {
-        if (newSet.size < maxPlayers) {
-          newSet.add(playerId);
+  const cyclePlayerStatus = useCallback((playerId: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setPlayerStatuses((prev) => {
+      const current = prev[playerId] || "bench";
+      let next: PlayerStatus;
+      
+      if (current === "bench") {
+        if (startingPlayers.length < maxPlayers) {
+          next = "starting";
         } else {
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+          return prev;
         }
+      } else if (current === "starting") {
+        next = "bench";
+      } else {
+        next = "bench";
       }
-      return newSet;
+      
+      return { ...prev, [playerId]: next };
     });
-  }, [maxPlayers]);
+  }, [startingPlayers.length, maxPlayers]);
+
+  const markNotPlaying = useCallback((playerId: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setPlayerStatuses((prev) => {
+      const current = prev[playerId];
+      if (current === "notPlaying") {
+        return { ...prev, [playerId]: "bench" };
+      }
+      return { ...prev, [playerId]: "notPlaying" };
+    });
+  }, []);
 
   const handleStartMatch = useCallback(async () => {
     if (!team || !isValid || creating) return;
@@ -111,8 +137,8 @@ export default function MatchSetupScreen() {
         location,
         format,
         date: new Date().toISOString(),
-        startingLineup: Array.from(startingIds),
-        substitutes: substitutes.map((p) => p.id),
+        startingLineup: startingPlayers.map((p) => p.id),
+        substitutes: benchPlayers.map((p) => p.id),
         events: [],
         scoreFor: 0,
         scoreAgainst: 0,
@@ -137,8 +163,8 @@ export default function MatchSetupScreen() {
     opposition,
     location,
     format,
-    startingIds,
-    substitutes,
+    startingPlayers,
+    benchPlayers,
     navigation,
   ]);
 
@@ -159,6 +185,45 @@ export default function MatchSetupScreen() {
       ),
     });
   }, [navigation, handleStartMatch, isValid, creating]);
+
+  const renderPlayerCard = useCallback(
+    (player: Player, status: PlayerStatus) => {
+      let bgColor = AppColors.pitchGreen;
+      let textColor = "#FFFFFF";
+      
+      if (status === "bench") {
+        bgColor = "#2196F3";
+      } else if (status === "notPlaying") {
+        bgColor = AppColors.elevated;
+        textColor = AppColors.textSecondary;
+      }
+
+      return (
+        <Pressable
+          key={player.id}
+          style={({ pressed }) => [
+            styles.playerCard,
+            { backgroundColor: bgColor, opacity: pressed ? 0.85 : 1 },
+          ]}
+          onPress={() => cyclePlayerStatus(player.id)}
+          onLongPress={() => markNotPlaying(player.id)}
+          delayLongPress={400}
+        >
+          <View style={styles.playerAvatar}>
+            <Feather name="user" size={16} color={AppColors.textSecondary} />
+          </View>
+          <ThemedText
+            type="body"
+            numberOfLines={1}
+            style={[styles.playerName, { color: textColor }]}
+          >
+            {player.squadNumber ? `${player.squadNumber}. ` : ""}{player.name}
+          </ThemedText>
+        </Pressable>
+      );
+    },
+    [cyclePlayerStatus, markNotPlaying]
+  );
 
   if (loading) {
     return (
@@ -183,148 +248,153 @@ export default function MatchSetupScreen() {
       contentContainerStyle={[
         styles.content,
         {
-          paddingTop: headerHeight + Spacing.xl,
+          paddingTop: headerHeight + Spacing.lg,
           paddingBottom: insets.bottom + Spacing.xl,
         },
       ]}
     >
-      <ThemedText type="small" style={styles.label}>
-        OPPOSITION
-      </ThemedText>
-      <TextInput
-        style={[
-          styles.input,
-          {
-            backgroundColor: AppColors.surface,
-            color: theme.text,
-          },
-        ]}
-        value={opposition}
-        onChangeText={setOpposition}
-        placeholder="Enter team name"
-        placeholderTextColor={AppColors.textDisabled}
-        autoFocus
-        maxLength={50}
-      />
+      <Card elevation={2} style={styles.matchInfoCard}>
+        <View style={styles.inputRow}>
+          <ThemedText type="small" style={styles.inputLabel}>VS</ThemedText>
+          <TextInput
+            style={[styles.oppositionInput, { color: theme.text }]}
+            value={opposition}
+            onChangeText={setOpposition}
+            placeholder="Opposition team"
+            placeholderTextColor={AppColors.textDisabled}
+            maxLength={50}
+          />
+        </View>
 
-      <ThemedText type="small" style={styles.label}>
-        LOCATION
-      </ThemedText>
-      <View style={styles.segmentedControl}>
-        {LOCATIONS.map((loc) => (
-          <Pressable
-            key={loc.key}
-            style={[
-              styles.segment,
-              location === loc.key && styles.segmentActive,
-            ]}
-            onPress={() => {
-              Haptics.selectionAsync();
-              setLocation(loc.key);
-            }}
-          >
-            <ThemedText
-              type="body"
-              style={[
-                styles.segmentText,
-                location === loc.key && styles.segmentTextActive,
-              ]}
-            >
-              {loc.label}
-            </ThemedText>
-          </Pressable>
-        ))}
-      </View>
+        <View style={styles.optionsRow}>
+          <View style={styles.locationButtons}>
+            {LOCATIONS.map((loc) => (
+              <Pressable
+                key={loc.key}
+                style={[
+                  styles.optionButton,
+                  location === loc.key && styles.optionButtonActive,
+                ]}
+                onPress={() => {
+                  Haptics.selectionAsync();
+                  setLocation(loc.key);
+                }}
+              >
+                <ThemedText
+                  type="small"
+                  style={[
+                    styles.optionText,
+                    location === loc.key && styles.optionTextActive,
+                  ]}
+                >
+                  {loc.label}
+                </ThemedText>
+              </Pressable>
+            ))}
+          </View>
 
-      <ThemedText type="small" style={styles.label}>
-        FORMAT
-      </ThemedText>
-      <View style={styles.formatGrid}>
-        {FORMATS.map((f) => (
-          <Pressable
-            key={f}
-            style={[
-              styles.formatButton,
-              format === f && styles.formatButtonActive,
-            ]}
-            onPress={() => {
-              Haptics.selectionAsync();
-              setFormat(f);
-              const max = getMaxPlayers(f);
-              setStartingIds((prev) => {
-                const arr = Array.from(prev);
-                return new Set(arr.slice(0, max));
-              });
-            }}
-          >
-            <ThemedText
-              type="body"
-              style={[
-                styles.formatText,
-                format === f && styles.formatTextActive,
-              ]}
-            >
-              {f}
-            </ThemedText>
-          </Pressable>
-        ))}
-      </View>
+          <View style={styles.formatButtons}>
+            {FORMATS.map((f) => (
+              <Pressable
+                key={f}
+                style={[
+                  styles.formatButton,
+                  format === f && styles.formatButtonActive,
+                ]}
+                onPress={() => {
+                  Haptics.selectionAsync();
+                  setFormat(f);
+                  setPlayerStatuses((prev) => {
+                    const max = getMaxPlayers(f);
+                    const starting = Object.entries(prev)
+                      .filter(([, s]) => s === "starting")
+                      .map(([id]) => id);
+                    if (starting.length > max) {
+                      const updated = { ...prev };
+                      starting.slice(max).forEach((id) => {
+                        updated[id] = "bench";
+                      });
+                      return updated;
+                    }
+                    return prev;
+                  });
+                }}
+              >
+                <ThemedText
+                  type="caption"
+                  style={[
+                    styles.formatText,
+                    format === f && styles.formatTextActive,
+                  ]}
+                >
+                  {f}
+                </ThemedText>
+              </Pressable>
+            ))}
+          </View>
+        </View>
+      </Card>
 
-      <ThemedText type="small" style={styles.label}>
-        SELECT STARTING LINEUP ({startingIds.size}/{maxPlayers})
-      </ThemedText>
       <ThemedText type="caption" style={styles.hint}>
-        Tap players to add them to starting lineup
+        Tap to move between Starting/Bench. Long-press for Not Playing.
       </ThemedText>
 
       {allPlayers.length > 0 ? (
-        <Card elevation={2} style={styles.playersCard}>
-          <View style={styles.playersGrid}>
-            {allPlayers.map((player) => {
-              const isStarting = startingIds.has(player.id);
-              return (
-                <Pressable
-                  key={player.id}
-                  style={[
-                    styles.playerChip,
-                    isStarting && styles.playerChipSelected,
-                  ]}
-                  onPress={() => togglePlayerSelection(player.id)}
-                >
-                  <View
-                    style={[
-                      styles.playerChipNumber,
-                      isStarting && styles.playerChipNumberSelected,
-                    ]}
-                  >
-                    <ThemedText
-                      type="caption"
-                      style={{
-                        color: isStarting ? "#FFFFFF" : AppColors.textSecondary,
-                        fontWeight: "600",
-                      }}
-                    >
-                      {player.squadNumber ?? "-"}
-                    </ThemedText>
-                  </View>
-                  <ThemedText
-                    type="small"
-                    numberOfLines={1}
-                    style={[
-                      styles.playerChipName,
-                      isStarting && { color: "#FFFFFF" },
-                    ]}
-                  >
-                    {player.name}
+        <View style={styles.columnsContainer}>
+          <View style={styles.column}>
+            <View style={styles.columnHeader}>
+              <Feather name="play" size={18} color={AppColors.pitchGreen} />
+              <ThemedText type="h4" style={{ color: AppColors.pitchGreen }}>
+                Starting
+              </ThemedText>
+              <ThemedText type="caption" style={styles.countBadge}>
+                {startingPlayers.length}/{maxPlayers}
+              </ThemedText>
+            </View>
+            <View style={styles.playersList}>
+              {startingPlayers.map((p) => renderPlayerCard(p, "starting"))}
+              {startingPlayers.length === 0 ? (
+                <View style={styles.emptyColumn}>
+                  <ThemedText type="small" style={{ color: AppColors.textDisabled }}>
+                    Tap players to add
                   </ThemedText>
-                  {isStarting ? (
-                    <Feather name="check" size={14} color="#FFFFFF" />
-                  ) : null}
-                </Pressable>
-              );
-            })}
+                </View>
+              ) : null}
+            </View>
           </View>
-        </Card>
+
+          <View style={styles.column}>
+            <View style={styles.columnHeader}>
+              <Feather name="users" size={18} color="#2196F3" />
+              <ThemedText type="h4" style={{ color: "#2196F3" }}>
+                On Bench
+              </ThemedText>
+              <ThemedText type="caption" style={styles.countBadge}>
+                {benchPlayers.length}
+              </ThemedText>
+            </View>
+            <View style={styles.playersList}>
+              {benchPlayers.map((p) => renderPlayerCard(p, "bench"))}
+            </View>
+
+            {notPlayingPlayers.length > 0 ? (
+              <>
+                <View style={[styles.columnHeader, { marginTop: Spacing.lg }]}>
+                  <Feather name="x" size={18} color={AppColors.textSecondary} />
+                  <ThemedText type="body" style={{ color: AppColors.textSecondary }}>
+                    Not Playing
+                  </ThemedText>
+                  <ThemedText type="caption" style={styles.countBadge}>
+                    {notPlayingPlayers.length}
+                  </ThemedText>
+                </View>
+                <View style={styles.playersList}>
+                  {notPlayingPlayers.map((p) => renderPlayerCard(p, "notPlaying"))}
+                </View>
+              </>
+            ) : null}
+          </View>
+        </View>
       ) : (
         <Card elevation={2} style={styles.emptyCard}>
           <Feather name="alert-circle" size={24} color={AppColors.warningYellow} />
@@ -336,42 +406,6 @@ export default function MatchSetupScreen() {
           </ThemedText>
         </Card>
       )}
-
-      {startingIds.size > 0 ? (
-        <>
-          <ThemedText type="small" style={[styles.label, { marginTop: Spacing.xl }]}>
-            STARTING ({startingIds.size})
-          </ThemedText>
-          <View style={styles.selectedList}>
-            {startingPlayers.map((player) => (
-              <View key={player.id} style={styles.selectedChip}>
-                <ThemedText type="caption" style={styles.selectedNumber}>
-                  {player.squadNumber ?? "-"}
-                </ThemedText>
-                <ThemedText type="small">{player.name}</ThemedText>
-              </View>
-            ))}
-          </View>
-        </>
-      ) : null}
-
-      {substitutes.length > 0 && startingIds.size > 0 ? (
-        <>
-          <ThemedText type="small" style={[styles.label, { marginTop: Spacing.lg }]}>
-            SUBSTITUTES ({substitutes.length})
-          </ThemedText>
-          <View style={styles.selectedList}>
-            {substitutes.map((player) => (
-              <View key={player.id} style={[styles.selectedChip, styles.subChip]}>
-                <ThemedText type="caption" style={styles.selectedNumber}>
-                  {player.squadNumber ?? "-"}
-                </ThemedText>
-                <ThemedText type="small">{player.name}</ThemedText>
-              </View>
-            ))}
-          </View>
-        </>
-      ) : null}
     </ScrollView>
   );
 }
@@ -381,67 +415,69 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
-    paddingHorizontal: Spacing.lg,
+    paddingHorizontal: Spacing.md,
   },
   loadingContainer: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
   },
-  label: {
-    color: AppColors.textSecondary,
+  matchInfoCard: {
+    padding: Spacing.md,
     marginBottom: Spacing.sm,
-    marginLeft: Spacing.xs,
   },
-  hint: {
-    color: AppColors.textDisabled,
-    marginBottom: Spacing.md,
-    marginLeft: Spacing.xs,
-    fontStyle: "italic",
-  },
-  input: {
-    height: Spacing.inputHeight,
-    borderRadius: BorderRadius.md,
-    paddingHorizontal: Spacing.lg,
-    fontSize: 16,
-    marginBottom: Spacing.xl,
-  },
-  segmentedControl: {
+  inputRow: {
     flexDirection: "row",
-    backgroundColor: AppColors.surface,
-    borderRadius: BorderRadius.md,
-    padding: 4,
-    marginBottom: Spacing.xl,
-  },
-  segment: {
-    flex: 1,
-    paddingVertical: Spacing.md,
-    borderRadius: BorderRadius.sm,
     alignItems: "center",
+    marginBottom: Spacing.md,
   },
-  segmentActive: {
+  inputLabel: {
+    color: AppColors.textSecondary,
+    marginRight: Spacing.sm,
+    fontWeight: "600",
+  },
+  oppositionInput: {
+    flex: 1,
+    height: 40,
+    backgroundColor: AppColors.elevated,
+    borderRadius: BorderRadius.sm,
+    paddingHorizontal: Spacing.md,
+    fontSize: 16,
+  },
+  optionsRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    gap: Spacing.md,
+  },
+  locationButtons: {
+    flexDirection: "row",
+    gap: Spacing.xs,
+  },
+  optionButton: {
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    backgroundColor: AppColors.elevated,
+    borderRadius: BorderRadius.sm,
+  },
+  optionButtonActive: {
     backgroundColor: AppColors.pitchGreen,
   },
-  segmentText: {
+  optionText: {
     color: AppColors.textSecondary,
   },
-  segmentTextActive: {
+  optionTextActive: {
     color: "#FFFFFF",
     fontWeight: "600",
   },
-  formatGrid: {
+  formatButtons: {
     flexDirection: "row",
-    flexWrap: "wrap",
-    gap: Spacing.sm,
-    marginBottom: Spacing.xl,
+    gap: Spacing.xs,
   },
   formatButton: {
-    flex: 1,
-    minWidth: "22%",
-    paddingVertical: Spacing.md,
-    backgroundColor: AppColors.surface,
-    borderRadius: BorderRadius.md,
-    alignItems: "center",
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.sm,
+    backgroundColor: AppColors.elevated,
+    borderRadius: BorderRadius.sm,
   },
   formatButtonActive: {
     backgroundColor: AppColors.pitchGreen,
@@ -453,66 +489,65 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontWeight: "600",
   },
-  playersCard: {
-    padding: Spacing.md,
+  hint: {
+    color: AppColors.textDisabled,
+    textAlign: "center",
+    marginBottom: Spacing.md,
+    fontStyle: "italic",
   },
-  playersGrid: {
+  columnsContainer: {
     flexDirection: "row",
-    flexWrap: "wrap",
     gap: Spacing.sm,
   },
-  playerChip: {
+  column: {
+    flex: 1,
+  },
+  columnHeader: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: AppColors.elevated,
-    paddingVertical: Spacing.sm,
-    paddingHorizontal: Spacing.md,
+    gap: Spacing.xs,
+    marginBottom: Spacing.sm,
+    paddingHorizontal: Spacing.xs,
+  },
+  countBadge: {
+    color: AppColors.textSecondary,
+    marginLeft: "auto",
+  },
+  playersList: {
+    gap: Spacing.xs,
+  },
+  playerCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: Spacing.sm,
     borderRadius: BorderRadius.sm,
-    gap: Spacing.sm,
+    minHeight: 48,
   },
-  playerChipSelected: {
-    backgroundColor: AppColors.pitchGreen,
-  },
-  playerChipNumber: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: AppColors.surface,
+  playerAvatar: {
+    width: 28,
+    height: 28,
+    borderRadius: 4,
+    backgroundColor: "rgba(255,255,255,0.2)",
     justifyContent: "center",
     alignItems: "center",
+    marginRight: Spacing.sm,
   },
-  playerChipNumberSelected: {
-    backgroundColor: "rgba(255,255,255,0.2)",
+  playerName: {
+    flex: 1,
+    fontWeight: "600",
   },
-  playerChipName: {
-    maxWidth: 80,
+  emptyColumn: {
+    padding: Spacing.lg,
+    alignItems: "center",
+    backgroundColor: AppColors.surface,
+    borderRadius: BorderRadius.sm,
+    borderWidth: 1,
+    borderColor: AppColors.elevated,
+    borderStyle: "dashed",
   },
   emptyCard: {
     padding: Spacing.xl,
     alignItems: "center",
     gap: Spacing.sm,
-  },
-  selectedList: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: Spacing.sm,
-  },
-  selectedChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: AppColors.surface,
-    paddingVertical: Spacing.xs,
-    paddingHorizontal: Spacing.md,
-    borderRadius: BorderRadius.xs,
-    borderLeftWidth: 3,
-    borderLeftColor: AppColors.pitchGreen,
-    gap: Spacing.sm,
-  },
-  subChip: {
-    borderLeftColor: AppColors.warningYellow,
-  },
-  selectedNumber: {
-    fontWeight: "600",
-    color: AppColors.textSecondary,
   },
 });
