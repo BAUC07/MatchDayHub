@@ -1,10 +1,11 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useRef } from "react";
 import {
   View,
   StyleSheet,
   TextInput,
   Pressable,
   ScrollView,
+  LayoutRectangle,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
@@ -12,6 +13,13 @@ import { useFocusEffect, useNavigation, useRoute, RouteProp } from "@react-navig
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Feather } from "@expo/vector-icons";
 import { HeaderButton } from "@react-navigation/elements";
+import { GestureDetector, Gesture } from "react-native-gesture-handler";
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  runOnJS,
+} from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 
 import { ThemedText } from "@/components/ThemedText";
@@ -33,6 +41,112 @@ const LOCATIONS: { key: MatchLocation; label: string }[] = [
   { key: "away", label: "Away" },
 ];
 
+interface DraggablePlayerProps {
+  player: Player;
+  status: PlayerStatus;
+  onDrop: (playerId: string, targetStatus: PlayerStatus) => void;
+  onTap: (playerId: string) => void;
+  columnLayouts: React.MutableRefObject<{ starting: LayoutRectangle | null; bench: LayoutRectangle | null }>;
+}
+
+function DraggablePlayer({ player, status, onDrop, onTap, columnLayouts }: DraggablePlayerProps) {
+  const translateX = useSharedValue(0);
+  const translateY = useSharedValue(0);
+  const scale = useSharedValue(1);
+  const zIndex = useSharedValue(0);
+  const isDragging = useSharedValue(false);
+
+  const triggerHaptic = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+  };
+
+  const handleDrop = (playerId: string, x: number) => {
+    const startingLayout = columnLayouts.current.starting;
+    const benchLayout = columnLayouts.current.bench;
+    
+    if (startingLayout && x < startingLayout.width + 20) {
+      onDrop(playerId, "starting");
+    } else if (benchLayout) {
+      onDrop(playerId, "bench");
+    }
+  };
+
+  const gesture = Gesture.Pan()
+    .onStart(() => {
+      isDragging.value = true;
+      scale.value = withSpring(1.05);
+      zIndex.value = 100;
+      runOnJS(triggerHaptic)();
+    })
+    .onUpdate((event) => {
+      translateX.value = event.translationX;
+      translateY.value = event.translationY;
+    })
+    .onEnd((event) => {
+      isDragging.value = false;
+      scale.value = withSpring(1);
+      zIndex.value = 0;
+      
+      const finalX = event.absoluteX;
+      runOnJS(handleDrop)(player.id, finalX);
+      
+      translateX.value = withSpring(0);
+      translateY.value = withSpring(0);
+    });
+
+  const tap = Gesture.Tap().onEnd(() => {
+    runOnJS(onTap)(player.id);
+  });
+
+  const composed = Gesture.Race(gesture, tap);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateX: translateX.value },
+      { translateY: translateY.value },
+      { scale: scale.value },
+    ],
+    zIndex: zIndex.value,
+    opacity: isDragging.value ? 0.9 : 1,
+  }));
+
+  let bgColor = AppColors.pitchGreen;
+  let textColor = "#FFFFFF";
+  
+  if (status === "bench") {
+    bgColor = "#2196F3";
+  } else if (status === "notPlaying") {
+    bgColor = AppColors.elevated;
+    textColor = AppColors.textSecondary;
+  }
+
+  return (
+    <GestureDetector gesture={composed}>
+      <Animated.View
+        style={[
+          styles.playerCard,
+          { backgroundColor: bgColor },
+          animatedStyle,
+        ]}
+      >
+        <View style={styles.dragHandle}>
+          <Feather name="menu" size={14} color="rgba(255,255,255,0.5)" />
+        </View>
+        <View style={styles.playerAvatar}>
+          <Feather name="user" size={14} color={AppColors.textSecondary} />
+        </View>
+        <ThemedText
+          type="body"
+          numberOfLines={1}
+          style={[styles.playerName, { color: textColor }]}
+        >
+          {player.squadNumber ? `${player.squadNumber}. ` : ""}{player.name}
+        </ThemedText>
+      </Animated.View>
+    </GestureDetector>
+  );
+}
+
 export default function MatchSetupScreen() {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
@@ -47,6 +161,11 @@ export default function MatchSetupScreen() {
   const [playerStatuses, setPlayerStatuses] = useState<Record<string, PlayerStatus>>({});
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
+
+  const columnLayouts = useRef<{ starting: LayoutRectangle | null; bench: LayoutRectangle | null }>({
+    starting: null,
+    bench: null,
+  });
 
   const loadTeam = useCallback(async () => {
     try {
@@ -89,14 +208,33 @@ export default function MatchSetupScreen() {
   const maxPlayers = getMaxPlayers(format);
   const isValid = opposition.trim().length >= 1 && startingPlayers.length > 0;
 
-  const cyclePlayerStatus = useCallback((playerId: string) => {
+  const handleDrop = useCallback((playerId: string, targetStatus: PlayerStatus) => {
+    setPlayerStatuses((prev) => {
+      const current = prev[playerId];
+      if (current === targetStatus) return prev;
+      
+      if (targetStatus === "starting") {
+        const currentStarting = Object.values(prev).filter((s) => s === "starting").length;
+        if (currentStarting >= maxPlayers) {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+          return prev;
+        }
+      }
+      
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      return { ...prev, [playerId]: targetStatus };
+    });
+  }, [maxPlayers]);
+
+  const handleTap = useCallback((playerId: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setPlayerStatuses((prev) => {
       const current = prev[playerId] || "bench";
       let next: PlayerStatus;
       
       if (current === "bench") {
-        if (startingPlayers.length < maxPlayers) {
+        const currentStarting = Object.values(prev).filter((s) => s === "starting").length;
+        if (currentStarting < maxPlayers) {
           next = "starting";
         } else {
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
@@ -110,7 +248,7 @@ export default function MatchSetupScreen() {
       
       return { ...prev, [playerId]: next };
     });
-  }, [startingPlayers.length, maxPlayers]);
+  }, [maxPlayers]);
 
   const markNotPlaying = useCallback((playerId: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -185,45 +323,6 @@ export default function MatchSetupScreen() {
       ),
     });
   }, [navigation, handleStartMatch, isValid, creating]);
-
-  const renderPlayerCard = useCallback(
-    (player: Player, status: PlayerStatus) => {
-      let bgColor = AppColors.pitchGreen;
-      let textColor = "#FFFFFF";
-      
-      if (status === "bench") {
-        bgColor = "#2196F3";
-      } else if (status === "notPlaying") {
-        bgColor = AppColors.elevated;
-        textColor = AppColors.textSecondary;
-      }
-
-      return (
-        <Pressable
-          key={player.id}
-          style={({ pressed }) => [
-            styles.playerCard,
-            { backgroundColor: bgColor, opacity: pressed ? 0.85 : 1 },
-          ]}
-          onPress={() => cyclePlayerStatus(player.id)}
-          onLongPress={() => markNotPlaying(player.id)}
-          delayLongPress={400}
-        >
-          <View style={styles.playerAvatar}>
-            <Feather name="user" size={16} color={AppColors.textSecondary} />
-          </View>
-          <ThemedText
-            type="body"
-            numberOfLines={1}
-            style={[styles.playerName, { color: textColor }]}
-          >
-            {player.squadNumber ? `${player.squadNumber}. ` : ""}{player.name}
-          </ThemedText>
-        </Pressable>
-      );
-    },
-    [cyclePlayerStatus, markNotPlaying]
-  );
 
   if (loading) {
     return (
@@ -336,12 +435,17 @@ export default function MatchSetupScreen() {
       </Card>
 
       <ThemedText type="caption" style={styles.hint}>
-        Tap to move between Starting/Bench. Long-press for Not Playing.
+        Drag players between columns or tap to move
       </ThemedText>
 
       {allPlayers.length > 0 ? (
         <View style={styles.columnsContainer}>
-          <View style={styles.column}>
+          <View
+            style={styles.column}
+            onLayout={(e) => {
+              columnLayouts.current.starting = e.nativeEvent.layout;
+            }}
+          >
             <View style={styles.columnHeader}>
               <Feather name="play" size={18} color={AppColors.pitchGreen} />
               <ThemedText type="h4" style={{ color: AppColors.pitchGreen }}>
@@ -352,18 +456,33 @@ export default function MatchSetupScreen() {
               </ThemedText>
             </View>
             <View style={styles.playersList}>
-              {startingPlayers.map((p) => renderPlayerCard(p, "starting"))}
+              {startingPlayers.map((p) => (
+                <DraggablePlayer
+                  key={p.id}
+                  player={p}
+                  status="starting"
+                  onDrop={handleDrop}
+                  onTap={handleTap}
+                  columnLayouts={columnLayouts}
+                />
+              ))}
               {startingPlayers.length === 0 ? (
                 <View style={styles.emptyColumn}>
-                  <ThemedText type="small" style={{ color: AppColors.textDisabled }}>
-                    Tap players to add
+                  <Feather name="arrow-left" size={20} color={AppColors.textDisabled} />
+                  <ThemedText type="small" style={{ color: AppColors.textDisabled, textAlign: "center" }}>
+                    Drag or tap players here
                   </ThemedText>
                 </View>
               ) : null}
             </View>
           </View>
 
-          <View style={styles.column}>
+          <View
+            style={styles.column}
+            onLayout={(e) => {
+              columnLayouts.current.bench = e.nativeEvent.layout;
+            }}
+          >
             <View style={styles.columnHeader}>
               <Feather name="users" size={18} color="#2196F3" />
               <ThemedText type="h4" style={{ color: "#2196F3" }}>
@@ -374,7 +493,16 @@ export default function MatchSetupScreen() {
               </ThemedText>
             </View>
             <View style={styles.playersList}>
-              {benchPlayers.map((p) => renderPlayerCard(p, "bench"))}
+              {benchPlayers.map((p) => (
+                <DraggablePlayer
+                  key={p.id}
+                  player={p}
+                  status="bench"
+                  onDrop={handleDrop}
+                  onTap={handleTap}
+                  columnLayouts={columnLayouts}
+                />
+              ))}
             </View>
 
             {notPlayingPlayers.length > 0 ? (
@@ -389,7 +517,16 @@ export default function MatchSetupScreen() {
                   </ThemedText>
                 </View>
                 <View style={styles.playersList}>
-                  {notPlayingPlayers.map((p) => renderPlayerCard(p, "notPlaying"))}
+                  {notPlayingPlayers.map((p) => (
+                    <DraggablePlayer
+                      key={p.id}
+                      player={p}
+                      status="notPlaying"
+                      onDrop={handleDrop}
+                      onTap={handleTap}
+                      columnLayouts={columnLayouts}
+                    />
+                  ))}
                 </View>
               </>
             ) : null}
@@ -523,9 +660,12 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.sm,
     minHeight: 48,
   },
+  dragHandle: {
+    marginRight: Spacing.xs,
+  },
   playerAvatar: {
-    width: 28,
-    height: 28,
+    width: 26,
+    height: 26,
     borderRadius: 4,
     backgroundColor: "rgba(255,255,255,0.2)",
     justifyContent: "center",
@@ -535,15 +675,17 @@ const styles = StyleSheet.create({
   playerName: {
     flex: 1,
     fontWeight: "600",
+    fontSize: 14,
   },
   emptyColumn: {
     padding: Spacing.lg,
     alignItems: "center",
     backgroundColor: AppColors.surface,
     borderRadius: BorderRadius.sm,
-    borderWidth: 1,
-    borderColor: AppColors.elevated,
+    borderWidth: 2,
+    borderColor: AppColors.pitchGreen,
     borderStyle: "dashed",
+    gap: Spacing.sm,
   },
   emptyCard: {
     padding: Spacing.xl,
