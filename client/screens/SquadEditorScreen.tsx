@@ -19,18 +19,12 @@ import { ThemedText } from "@/components/ThemedText";
 import { Card } from "@/components/Card";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, AppColors, BorderRadius } from "@/constants/theme";
-import { Team, Player, PlayerState } from "@/types";
+import { Team, Player } from "@/types";
 import { getTeam, saveTeam, generateId } from "@/lib/storage";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 type SquadEditorRouteProp = RouteProp<RootStackParamList, "SquadEditor">;
-
-const PLAYER_STATES: { key: PlayerState; label: string; color: string }[] = [
-  { key: "starting", label: "Starting", color: AppColors.pitchGreen },
-  { key: "substitute", label: "Substitute", color: AppColors.warningYellow },
-  { key: "unavailable", label: "Unavailable", color: AppColors.textDisabled },
-];
 
 export default function SquadEditorScreen() {
   const insets = useSafeAreaInsets();
@@ -115,7 +109,7 @@ export default function SquadEditorScreen() {
       id: generateId(),
       name,
       squadNumber: number,
-      state: "starting",
+      state: "substitute",
     };
 
     setPlayers((prev) => [...prev, newPlayer]);
@@ -137,63 +131,29 @@ export default function SquadEditorScreen() {
     ]);
   }, []);
 
-  const handleChangeState = useCallback((playerId: string, newState: PlayerState) => {
-    Haptics.selectionAsync();
-    setPlayers((prev) =>
-      prev.map((p) => (p.id === playerId ? { ...p, state: newState } : p))
-    );
-  }, []);
-
   const renderPlayerItem = useCallback(
     ({ item }: { item: Player }) => (
-      <Card elevation={2} style={styles.playerCard}>
-        <View style={styles.playerHeader}>
-          <View style={styles.playerInfo}>
-            <View style={styles.playerNumber}>
-              <ThemedText type="body" style={styles.numberText}>
-                {item.squadNumber ?? "-"}
-              </ThemedText>
-            </View>
-            <ThemedText type="body" numberOfLines={1} style={styles.playerName}>
-              {item.name}
+      <View style={styles.playerCard}>
+        <View style={styles.playerInfo}>
+          <View style={styles.playerNumber}>
+            <ThemedText type="body" style={styles.numberText}>
+              {item.squadNumber ?? "-"}
             </ThemedText>
           </View>
-          <Pressable
-            onPress={() => handleRemovePlayer(item.id)}
-            hitSlop={8}
-            style={({ pressed }) => [{ opacity: pressed ? 0.6 : 1 }]}
-          >
-            <Feather name="x" size={20} color={AppColors.redCard} />
-          </Pressable>
+          <ThemedText type="body" numberOfLines={1} style={styles.playerName}>
+            {item.name}
+          </ThemedText>
         </View>
-
-        <View style={styles.stateButtons}>
-          {PLAYER_STATES.map((state) => (
-            <Pressable
-              key={state.key}
-              style={[
-                styles.stateButton,
-                item.state === state.key && {
-                  backgroundColor: state.color,
-                },
-              ]}
-              onPress={() => handleChangeState(item.id, state.key)}
-            >
-              <ThemedText
-                type="caption"
-                style={[
-                  styles.stateButtonText,
-                  item.state === state.key && { color: "#FFFFFF" },
-                ]}
-              >
-                {state.label}
-              </ThemedText>
-            </Pressable>
-          ))}
-        </View>
-      </Card>
+        <Pressable
+          onPress={() => handleRemovePlayer(item.id)}
+          hitSlop={8}
+          style={({ pressed }) => [{ opacity: pressed ? 0.6 : 1 }]}
+        >
+          <Feather name="x" size={20} color={AppColors.redCard} />
+        </Pressable>
+      </View>
     ),
-    [handleRemovePlayer, handleChangeState]
+    [handleRemovePlayer]
   );
 
   if (loading) {
@@ -221,7 +181,7 @@ export default function SquadEditorScreen() {
           styles.listContent,
           {
             paddingTop: headerHeight + Spacing.xl,
-            paddingBottom: insets.bottom + 120,
+            paddingBottom: insets.bottom + Spacing.xl,
           },
         ]}
         data={players}
@@ -262,6 +222,9 @@ export default function SquadEditorScreen() {
                 <Feather name="plus" size={20} color="#FFFFFF" />
               </Pressable>
             </View>
+            <ThemedText type="caption" style={styles.hint}>
+              You'll select starting lineup when setting up a match
+            </ThemedText>
           </Card>
         }
         ListEmptyComponent={
@@ -308,6 +271,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: Spacing.sm,
+    marginBottom: Spacing.md,
   },
   nameInput: {
     flex: 1,
@@ -337,14 +301,17 @@ const styles = StyleSheet.create({
   addButtonDisabled: {
     backgroundColor: AppColors.textDisabled,
   },
-  playerCard: {
-    padding: Spacing.md,
+  hint: {
+    color: AppColors.textSecondary,
+    fontStyle: "italic",
   },
-  playerHeader: {
+  playerCard: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: Spacing.md,
+    backgroundColor: AppColors.surface,
+    borderRadius: BorderRadius.md,
+    padding: Spacing.md,
   },
   playerInfo: {
     flexDirection: "row",
@@ -352,9 +319,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   playerNumber: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: AppColors.elevated,
     justifyContent: "center",
     alignItems: "center",
@@ -367,23 +334,8 @@ const styles = StyleSheet.create({
   playerName: {
     flex: 1,
   },
-  stateButtons: {
-    flexDirection: "row",
-    gap: Spacing.sm,
-  },
-  stateButton: {
-    flex: 1,
-    paddingVertical: Spacing.sm,
-    paddingHorizontal: Spacing.sm,
-    borderRadius: BorderRadius.xs,
-    backgroundColor: AppColors.elevated,
-    alignItems: "center",
-  },
-  stateButtonText: {
-    color: AppColors.textSecondary,
-  },
   separator: {
-    height: Spacing.md,
+    height: Spacing.sm,
   },
   emptyContainer: {
     alignItems: "center",

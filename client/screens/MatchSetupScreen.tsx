@@ -5,6 +5,7 @@ import {
   TextInput,
   Pressable,
   ScrollView,
+  FlatList,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
@@ -42,6 +43,7 @@ export default function MatchSetupScreen() {
   const [opposition, setOpposition] = useState("");
   const [location, setLocation] = useState<MatchLocation>("home");
   const [format, setFormat] = useState<MatchFormat>("11v11");
+  const [startingIds, setStartingIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
 
@@ -62,10 +64,38 @@ export default function MatchSetupScreen() {
     }, [loadTeam])
   );
 
-  const startingPlayers = team?.players.filter((p) => p.state === "starting") || [];
-  const substitutes = team?.players.filter((p) => p.state === "substitute") || [];
+  const allPlayers = team?.players || [];
+  const startingPlayers = allPlayers.filter((p) => startingIds.has(p.id));
+  const substitutes = allPlayers.filter((p) => !startingIds.has(p.id));
 
-  const isValid = opposition.trim().length >= 1 && startingPlayers.length > 0;
+  const getMaxPlayers = (f: MatchFormat) => {
+    switch (f) {
+      case "5v5": return 5;
+      case "7v7": return 7;
+      case "9v9": return 9;
+      case "11v11": return 11;
+    }
+  };
+
+  const maxPlayers = getMaxPlayers(format);
+  const isValid = opposition.trim().length >= 1 && startingIds.size > 0;
+
+  const togglePlayerSelection = useCallback((playerId: string) => {
+    Haptics.selectionAsync();
+    setStartingIds((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(playerId)) {
+        newSet.delete(playerId);
+      } else {
+        if (newSet.size < maxPlayers) {
+          newSet.add(playerId);
+        } else {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+        }
+      }
+      return newSet;
+    });
+  }, [maxPlayers]);
 
   const handleStartMatch = useCallback(async () => {
     if (!team || !isValid || creating) return;
@@ -81,7 +111,7 @@ export default function MatchSetupScreen() {
         location,
         format,
         date: new Date().toISOString(),
-        startingLineup: startingPlayers.map((p) => p.id),
+        startingLineup: Array.from(startingIds),
         substitutes: substitutes.map((p) => p.id),
         events: [],
         scoreFor: 0,
@@ -107,7 +137,7 @@ export default function MatchSetupScreen() {
     opposition,
     location,
     format,
-    startingPlayers,
+    startingIds,
     substitutes,
     navigation,
   ]);
@@ -220,6 +250,11 @@ export default function MatchSetupScreen() {
             onPress={() => {
               Haptics.selectionAsync();
               setFormat(f);
+              const max = getMaxPlayers(f);
+              setStartingIds((prev) => {
+                const arr = Array.from(prev);
+                return new Set(arr.slice(0, max));
+              });
             }}
           >
             <ThemedText
@@ -236,51 +271,105 @@ export default function MatchSetupScreen() {
       </View>
 
       <ThemedText type="small" style={styles.label}>
-        STARTING LINEUP ({startingPlayers.length})
+        SELECT STARTING LINEUP ({startingIds.size}/{maxPlayers})
       </ThemedText>
-      <Card elevation={2} style={styles.lineupCard}>
-        {startingPlayers.length > 0 ? (
-          <View style={styles.playerChips}>
+      <ThemedText type="caption" style={styles.hint}>
+        Tap players to add them to starting lineup
+      </ThemedText>
+
+      {allPlayers.length > 0 ? (
+        <Card elevation={2} style={styles.playersCard}>
+          <View style={styles.playersGrid}>
+            {allPlayers.map((player) => {
+              const isStarting = startingIds.has(player.id);
+              return (
+                <Pressable
+                  key={player.id}
+                  style={[
+                    styles.playerChip,
+                    isStarting && styles.playerChipSelected,
+                  ]}
+                  onPress={() => togglePlayerSelection(player.id)}
+                >
+                  <View
+                    style={[
+                      styles.playerChipNumber,
+                      isStarting && styles.playerChipNumberSelected,
+                    ]}
+                  >
+                    <ThemedText
+                      type="caption"
+                      style={{
+                        color: isStarting ? "#FFFFFF" : AppColors.textSecondary,
+                        fontWeight: "600",
+                      }}
+                    >
+                      {player.squadNumber ?? "-"}
+                    </ThemedText>
+                  </View>
+                  <ThemedText
+                    type="small"
+                    numberOfLines={1}
+                    style={[
+                      styles.playerChipName,
+                      isStarting && { color: "#FFFFFF" },
+                    ]}
+                  >
+                    {player.name}
+                  </ThemedText>
+                  {isStarting ? (
+                    <Feather name="check" size={14} color="#FFFFFF" />
+                  ) : null}
+                </Pressable>
+              );
+            })}
+          </View>
+        </Card>
+      ) : (
+        <Card elevation={2} style={styles.emptyCard}>
+          <Feather name="alert-circle" size={24} color={AppColors.warningYellow} />
+          <ThemedText type="body" style={{ color: AppColors.textSecondary }}>
+            No players in squad
+          </ThemedText>
+          <ThemedText type="small" style={{ color: AppColors.textSecondary }}>
+            Go back to add players to your team first
+          </ThemedText>
+        </Card>
+      )}
+
+      {startingIds.size > 0 ? (
+        <>
+          <ThemedText type="small" style={[styles.label, { marginTop: Spacing.xl }]}>
+            STARTING ({startingIds.size})
+          </ThemedText>
+          <View style={styles.selectedList}>
             {startingPlayers.map((player) => (
-              <View key={player.id} style={styles.playerChip}>
-                <ThemedText type="small" style={styles.chipNumber}>
+              <View key={player.id} style={styles.selectedChip}>
+                <ThemedText type="caption" style={styles.selectedNumber}>
                   {player.squadNumber ?? "-"}
                 </ThemedText>
-                <ThemedText type="small" numberOfLines={1}>
-                  {player.name}
-                </ThemedText>
+                <ThemedText type="small">{player.name}</ThemedText>
               </View>
             ))}
           </View>
-        ) : (
-          <View style={styles.emptyLineup}>
-            <Feather name="alert-circle" size={20} color={AppColors.warningYellow} />
-            <ThemedText type="small" style={{ color: AppColors.textSecondary }}>
-              No starting players. Go back to edit squad.
-            </ThemedText>
-          </View>
-        )}
-      </Card>
+        </>
+      ) : null}
 
-      {substitutes.length > 0 ? (
+      {substitutes.length > 0 && startingIds.size > 0 ? (
         <>
-          <ThemedText type="small" style={styles.label}>
+          <ThemedText type="small" style={[styles.label, { marginTop: Spacing.lg }]}>
             SUBSTITUTES ({substitutes.length})
           </ThemedText>
-          <Card elevation={2} style={styles.lineupCard}>
-            <View style={styles.playerChips}>
-              {substitutes.map((player) => (
-                <View key={player.id} style={[styles.playerChip, styles.subChip]}>
-                  <ThemedText type="small" style={styles.chipNumber}>
-                    {player.squadNumber ?? "-"}
-                  </ThemedText>
-                  <ThemedText type="small" numberOfLines={1}>
-                    {player.name}
-                  </ThemedText>
-                </View>
-              ))}
-            </View>
-          </Card>
+          <View style={styles.selectedList}>
+            {substitutes.map((player) => (
+              <View key={player.id} style={[styles.selectedChip, styles.subChip]}>
+                <ThemedText type="caption" style={styles.selectedNumber}>
+                  {player.squadNumber ?? "-"}
+                </ThemedText>
+                <ThemedText type="small">{player.name}</ThemedText>
+              </View>
+            ))}
+          </View>
         </>
       ) : null}
     </ScrollView>
@@ -303,6 +392,12 @@ const styles = StyleSheet.create({
     color: AppColors.textSecondary,
     marginBottom: Spacing.sm,
     marginLeft: Spacing.xs,
+  },
+  hint: {
+    color: AppColors.textDisabled,
+    marginBottom: Spacing.md,
+    marginLeft: Spacing.xs,
+    fontStyle: "italic",
   },
   input: {
     height: Spacing.inputHeight,
@@ -358,11 +453,10 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontWeight: "600",
   },
-  lineupCard: {
-    padding: Spacing.lg,
-    marginBottom: Spacing.xl,
+  playersCard: {
+    padding: Spacing.md,
   },
-  playerChips: {
+  playersGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
     gap: Spacing.sm,
@@ -371,23 +465,54 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: AppColors.elevated,
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    borderRadius: BorderRadius.sm,
+    gap: Spacing.sm,
+  },
+  playerChipSelected: {
+    backgroundColor: AppColors.pitchGreen,
+  },
+  playerChipNumber: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: AppColors.surface,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  playerChipNumberSelected: {
+    backgroundColor: "rgba(255,255,255,0.2)",
+  },
+  playerChipName: {
+    maxWidth: 80,
+  },
+  emptyCard: {
+    padding: Spacing.xl,
+    alignItems: "center",
+    gap: Spacing.sm,
+  },
+  selectedList: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: Spacing.sm,
+  },
+  selectedChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: AppColors.surface,
     paddingVertical: Spacing.xs,
     paddingHorizontal: Spacing.md,
     borderRadius: BorderRadius.xs,
     borderLeftWidth: 3,
     borderLeftColor: AppColors.pitchGreen,
+    gap: Spacing.sm,
   },
   subChip: {
     borderLeftColor: AppColors.warningYellow,
   },
-  chipNumber: {
+  selectedNumber: {
     fontWeight: "600",
-    marginRight: Spacing.sm,
     color: AppColors.textSecondary,
-  },
-  emptyLineup: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.sm,
   },
 });

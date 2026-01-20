@@ -18,14 +18,12 @@ import { ThemedText } from "@/components/ThemedText";
 import { Card } from "@/components/Card";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, AppColors, BorderRadius } from "@/constants/theme";
-import { Team, Player, PlayerState } from "@/types";
+import { Team, Player } from "@/types";
 import { getTeam, deleteTeam as deleteTeamStorage } from "@/lib/storage";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 type TeamDetailRouteProp = RouteProp<RootStackParamList, "TeamDetail">;
-
-const STATE_ORDER: PlayerState[] = ["starting", "substitute", "unavailable"];
 
 export default function TeamDetailScreen() {
   const insets = useSafeAreaInsets();
@@ -104,19 +102,6 @@ export default function TeamDetailScreen() {
     });
   }, [navigation, team, handleEditSquad, handleDeleteTeam]);
 
-  const groupedPlayers = React.useMemo(() => {
-    if (!team) return {};
-    const groups: Record<PlayerState, Player[]> = {
-      starting: [],
-      substitute: [],
-      unavailable: [],
-    };
-    team.players.forEach((player) => {
-      groups[player.state].push(player);
-    });
-    return groups;
-  }, [team]);
-
   const renderPlayerItem = useCallback(
     ({ item }: { item: Player }) => (
       <View style={styles.playerItem}>
@@ -131,38 +116,6 @@ export default function TeamDetailScreen() {
       </View>
     ),
     []
-  );
-
-  const renderSection = useCallback(
-    (title: string, players: Player[], state: PlayerState) => {
-      if (players.length === 0) return null;
-
-      const stateColors: Record<PlayerState, string> = {
-        starting: AppColors.pitchGreen,
-        substitute: AppColors.warningYellow,
-        unavailable: AppColors.textDisabled,
-      };
-
-      return (
-        <View style={styles.section} key={state}>
-          <View style={styles.sectionHeader}>
-            <View
-              style={[
-                styles.sectionIndicator,
-                { backgroundColor: stateColors[state] },
-              ]}
-            />
-            <ThemedText type="small" style={styles.sectionTitle}>
-              {title.toUpperCase()} ({players.length})
-            </ThemedText>
-          </View>
-          {players.map((player) => (
-            <View key={player.id}>{renderPlayerItem({ item: player })}</View>
-          ))}
-        </View>
-      );
-    },
-    [renderPlayerItem]
   );
 
   if (loading) {
@@ -200,7 +153,6 @@ export default function TeamDetailScreen() {
   }
 
   const hasPlayers = team.players.length > 0;
-  const hasStartingLineup = groupedPlayers.starting?.length > 0;
 
   return (
     <View style={[styles.container, { backgroundColor: theme.backgroundRoot }]}>
@@ -252,15 +204,32 @@ export default function TeamDetailScreen() {
               </View>
             </Card>
 
-            <ThemedText type="h4" style={styles.squadTitle}>
-              Squad
-            </ThemedText>
+            <View style={styles.squadHeader}>
+              <ThemedText type="h4">Squad</ThemedText>
+              <Pressable
+                onPress={handleEditSquad}
+                style={({ pressed }) => [
+                  styles.editButton,
+                  { opacity: pressed ? 0.7 : 1 },
+                ]}
+              >
+                <Feather name="edit-2" size={16} color={AppColors.pitchGreen} />
+                <ThemedText type="small" style={{ color: AppColors.pitchGreen }}>
+                  Edit
+                </ThemedText>
+              </Pressable>
+            </View>
 
             {hasPlayers ? (
               <Card elevation={2} style={styles.squadCard}>
-                {renderSection("Starting", groupedPlayers.starting || [], "starting")}
-                {renderSection("Substitutes", groupedPlayers.substitute || [], "substitute")}
-                {renderSection("Unavailable", groupedPlayers.unavailable || [], "unavailable")}
+                {team.players.map((player, index) => (
+                  <View key={player.id}>
+                    {renderPlayerItem({ item: player })}
+                    {index < team.players.length - 1 ? (
+                      <View style={styles.divider} />
+                    ) : null}
+                  </View>
+                ))}
               </Card>
             ) : (
               <Card elevation={2} style={styles.emptySquadCard}>
@@ -306,10 +275,10 @@ export default function TeamDetailScreen() {
               opacity: pressed ? 0.9 : 1,
               transform: [{ scale: pressed ? 0.98 : 1 }],
             },
-            !hasStartingLineup && styles.fabDisabled,
+            !hasPlayers && styles.fabDisabled,
           ]}
           onPress={handleStartMatch}
-          disabled={!hasStartingLineup}
+          disabled={!hasPlayers}
         >
           <Feather name="play" size={24} color="#FFFFFF" />
           <ThemedText type="button" style={styles.fabText}>
@@ -351,12 +320,20 @@ const styles = StyleSheet.create({
   statItem: {
     alignItems: "center",
   },
-  squadTitle: {
+  squadHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: Spacing.md,
     marginLeft: Spacing.xs,
   },
+  editButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.xs,
+  },
   squadCard: {
-    padding: Spacing.lg,
+    padding: Spacing.md,
   },
   emptySquadCard: {
     padding: Spacing["2xl"],
@@ -373,34 +350,15 @@ const styles = StyleSheet.create({
     gap: Spacing.xs,
     marginTop: Spacing.sm,
   },
-  section: {
-    marginBottom: Spacing.lg,
-  },
-  sectionHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: Spacing.sm,
-  },
-  sectionIndicator: {
-    width: 4,
-    height: 16,
-    borderRadius: 2,
-    marginRight: Spacing.sm,
-  },
-  sectionTitle: {
-    color: AppColors.textSecondary,
-  },
   playerItem: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: Spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: AppColors.elevated,
+    paddingVertical: Spacing.md,
   },
   playerNumber: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: AppColors.elevated,
     justifyContent: "center",
     alignItems: "center",
@@ -412,6 +370,10 @@ const styles = StyleSheet.create({
   },
   playerName: {
     flex: 1,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: AppColors.elevated,
   },
   fabContainer: {
     position: "absolute",

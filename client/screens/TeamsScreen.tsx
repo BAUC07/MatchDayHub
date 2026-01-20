@@ -13,7 +13,6 @@ import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Feather } from "@expo/vector-icons";
-import { HeaderButton } from "@react-navigation/elements";
 import * as Haptics from "expo-haptics";
 
 import { ThemedText } from "@/components/ThemedText";
@@ -87,24 +86,6 @@ export default function TeamsScreen() {
     [navigation]
   );
 
-  React.useLayoutEffect(() => {
-    navigation.getParent()?.setOptions({
-      headerRight: () => (
-        <HeaderButton
-          onPress={handleAddTeam}
-          disabled={!canAddTeam}
-          pressOpacity={0.7}
-        >
-          <Feather
-            name="plus"
-            size={24}
-            color={canAddTeam ? AppColors.pitchGreen : AppColors.textDisabled}
-          />
-        </HeaderButton>
-      ),
-    });
-  }, [navigation, handleAddTeam, canAddTeam]);
-
   const renderTeamCard = useCallback(
     ({ item }: { item: Team }) => (
       <Card
@@ -142,6 +123,47 @@ export default function TeamsScreen() {
     [handleTeamPress]
   );
 
+  const renderCreateTeamCard = useCallback(
+    () => (
+      <Pressable
+        style={({ pressed }) => [
+          styles.createTeamCard,
+          { opacity: pressed ? 0.8 : 1 },
+          !canAddTeam && styles.createTeamCardDisabled,
+        ]}
+        onPress={handleAddTeam}
+        disabled={!canAddTeam}
+      >
+        <View style={styles.createTeamIcon}>
+          <Feather
+            name="plus"
+            size={28}
+            color={canAddTeam ? AppColors.pitchGreen : AppColors.textDisabled}
+          />
+        </View>
+        <View style={styles.createTeamText}>
+          <ThemedText
+            type="h4"
+            style={{
+              color: canAddTeam ? theme.text : AppColors.textDisabled,
+            }}
+          >
+            Create Team
+          </ThemedText>
+          <ThemedText
+            type="small"
+            style={{ color: AppColors.textSecondary }}
+          >
+            {canAddTeam
+              ? "Add a new team to manage"
+              : "Upgrade to add more teams"}
+          </ThemedText>
+        </View>
+      </Pressable>
+    ),
+    [canAddTeam, handleAddTeam, theme.text]
+  );
+
   const renderEmptyState = useCallback(
     () => (
       <View style={styles.emptyContainer}>
@@ -156,21 +178,9 @@ export default function TeamsScreen() {
         <ThemedText type="body" style={styles.emptyText}>
           Create your first team to start logging matches
         </ThemedText>
-        <Pressable
-          style={({ pressed }) => [
-            styles.createButton,
-            { opacity: pressed ? 0.8 : 1 },
-          ]}
-          onPress={handleAddTeam}
-        >
-          <Feather name="plus" size={20} color="#FFFFFF" />
-          <ThemedText type="button" style={styles.createButtonText}>
-            Create Team
-          </ThemedText>
-        </Pressable>
       </View>
     ),
-    [handleAddTeam]
+    []
   );
 
   if (loading) {
@@ -199,13 +209,17 @@ export default function TeamsScreen() {
           paddingTop: headerHeight + Spacing.xl,
           paddingBottom: tabBarHeight + Spacing.xl,
         },
-        teams.length === 0 && styles.emptyListContent,
       ]}
       scrollIndicatorInsets={{ bottom: insets.bottom }}
       data={teams}
       keyExtractor={(item) => item.id}
       renderItem={renderTeamCard}
-      ListEmptyComponent={renderEmptyState}
+      ListHeaderComponent={
+        <>
+          {renderCreateTeamCard()}
+          {teams.length === 0 ? renderEmptyState() : null}
+        </>
+      }
       refreshControl={
         <RefreshControl
           refreshing={refreshing}
@@ -225,14 +239,36 @@ const styles = StyleSheet.create({
   listContent: {
     paddingHorizontal: Spacing.lg,
   },
-  emptyListContent: {
-    flexGrow: 1,
-    justifyContent: "center",
-  },
   loadingContainer: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
+  },
+  createTeamCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: AppColors.surface,
+    borderRadius: BorderRadius["2xl"],
+    padding: Spacing.lg,
+    marginBottom: Spacing.xl,
+    borderWidth: 2,
+    borderColor: AppColors.pitchGreen,
+    borderStyle: "dashed",
+  },
+  createTeamCardDisabled: {
+    borderColor: AppColors.textDisabled,
+  },
+  createTeamIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: BorderRadius.md,
+    backgroundColor: AppColors.elevated,
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: Spacing.lg,
+  },
+  createTeamText: {
+    flex: 1,
   },
   teamCard: {
     padding: Spacing.lg,
@@ -262,6 +298,7 @@ const styles = StyleSheet.create({
   emptyContainer: {
     alignItems: "center",
     paddingHorizontal: Spacing.xl,
+    paddingTop: Spacing["3xl"],
   },
   emptyImage: {
     width: 160,
@@ -276,18 +313,5 @@ const styles = StyleSheet.create({
   emptyText: {
     textAlign: "center",
     color: AppColors.textSecondary,
-    marginBottom: Spacing["2xl"],
-  },
-  createButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: AppColors.pitchGreen,
-    paddingVertical: Spacing.md,
-    paddingHorizontal: Spacing.xl,
-    borderRadius: BorderRadius.md,
-    gap: Spacing.sm,
-  },
-  createButtonText: {
-    color: "#FFFFFF",
   },
 });
