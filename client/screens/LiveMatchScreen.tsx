@@ -45,6 +45,7 @@ export default function LiveMatchScreen() {
   const [currentAction, setCurrentAction] = useState<ActionType | null>(null);
   const [showTimeline, setShowTimeline] = useState(false);
   const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
+  const [showEndConfirm, setShowEndConfirm] = useState(false);
 
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const lastSaveRef = useRef<number>(0);
@@ -240,48 +241,46 @@ export default function LiveMatchScreen() {
 
   const handleEndMatch = useCallback(() => {
     if (!match || !team) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setShowEndConfirm(true);
+  }, [match, team]);
 
-    Alert.alert("End Match", "Are you sure you want to end this match?", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "End Match",
-        style: "destructive",
-        onPress: async () => {
-          setIsRunning(false);
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  const confirmEndMatch = useCallback(async () => {
+    if (!match || !team) return;
+    
+    setShowEndConfirm(false);
+    setIsRunning(false);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
-          const result =
-            match.scoreFor > match.scoreAgainst
-              ? "win"
-              : match.scoreFor < match.scoreAgainst
-                ? "loss"
-                : "draw";
+    const result =
+      match.scoreFor > match.scoreAgainst
+        ? "win"
+        : match.scoreFor < match.scoreAgainst
+          ? "loss"
+          : "draw";
 
-          const updatedMatch: Match = {
-            ...match,
-            isCompleted: true,
-            totalMatchTime: matchTime,
-          };
+    const updatedMatch: Match = {
+      ...match,
+      isCompleted: true,
+      totalMatchTime: matchTime,
+    };
 
-          const updatedTeam: Team = {
-            ...team,
-            matchesPlayed: team.matchesPlayed + 1,
-            wins: team.wins + (result === "win" ? 1 : 0),
-            draws: team.draws + (result === "draw" ? 1 : 0),
-            losses: team.losses + (result === "loss" ? 1 : 0),
-            lastMatchDate: match.date,
-          };
+    const updatedTeam: Team = {
+      ...team,
+      matchesPlayed: team.matchesPlayed + 1,
+      wins: team.wins + (result === "win" ? 1 : 0),
+      draws: team.draws + (result === "draw" ? 1 : 0),
+      losses: team.losses + (result === "loss" ? 1 : 0),
+      lastMatchDate: match.date,
+    };
 
-          try {
-            await saveMatch(updatedMatch);
-            await saveTeam(updatedTeam);
-            navigation.replace("MatchSummary", { matchId: match.id });
-          } catch (error) {
-            console.error("Error ending match:", error);
-          }
-        },
-      },
-    ]);
+    try {
+      await saveMatch(updatedMatch);
+      await saveTeam(updatedTeam);
+      navigation.replace("MatchSummary", { matchId: match.id });
+    } catch (error) {
+      console.error("Error ending match:", error);
+    }
   }, [match, team, matchTime, navigation]);
 
   const undoLastEvent = useCallback(() => {
@@ -579,6 +578,25 @@ export default function LiveMatchScreen() {
         players={team.players}
         onClose={() => setShowTimeline(false)}
       />
+
+      <Modal visible={showEndConfirm} transparent animationType="fade" onRequestClose={() => setShowEndConfirm(false)}>
+        <View style={confirmStyles.overlay}>
+          <View style={confirmStyles.dialog}>
+            <ThemedText type="h4" style={confirmStyles.title}>End Match?</ThemedText>
+            <ThemedText type="body" style={confirmStyles.message}>
+              Are you sure you want to end this game?
+            </ThemedText>
+            <View style={confirmStyles.buttons}>
+              <Pressable style={confirmStyles.cancelButton} onPress={() => setShowEndConfirm(false)}>
+                <ThemedText type="button" style={confirmStyles.cancelText}>Cancel</ThemedText>
+              </Pressable>
+              <Pressable style={confirmStyles.confirmButton} onPress={confirmEndMatch}>
+                <ThemedText type="button" style={confirmStyles.confirmText}>Yes, End Game</ThemedText>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -1011,4 +1029,16 @@ const sheetStyles = StyleSheet.create({
   timelineItem: { flexDirection: "row", alignItems: "center", gap: Spacing.md, paddingVertical: Spacing.md, borderBottomWidth: 1, borderBottomColor: AppColors.elevated },
   timelineTime: { color: AppColors.textSecondary, width: 50 },
   timelineText: { flex: 1 },
+});
+
+const confirmStyles = StyleSheet.create({
+  overlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.7)", justifyContent: "center", alignItems: "center", padding: Spacing.xl },
+  dialog: { backgroundColor: AppColors.surface, borderRadius: BorderRadius.lg, padding: Spacing.xl, width: "100%", maxWidth: 320 },
+  title: { textAlign: "center", marginBottom: Spacing.md },
+  message: { textAlign: "center", color: AppColors.textSecondary, marginBottom: Spacing.xl },
+  buttons: { flexDirection: "row", gap: Spacing.md },
+  cancelButton: { flex: 1, paddingVertical: Spacing.md, backgroundColor: AppColors.elevated, borderRadius: BorderRadius.sm, alignItems: "center" },
+  cancelText: { color: AppColors.textSecondary },
+  confirmButton: { flex: 1, paddingVertical: Spacing.md, backgroundColor: AppColors.redCard, borderRadius: BorderRadius.sm, alignItems: "center" },
+  confirmText: { color: "#FFFFFF" },
 });
