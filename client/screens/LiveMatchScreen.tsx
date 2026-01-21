@@ -8,12 +8,15 @@ import {
   FlatList,
   Alert,
   ScrollView,
+  LayoutChangeEvent,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
+import { Gesture, GestureDetector, GestureHandlerRootView } from "react-native-gesture-handler";
+import Animated, { useSharedValue, useAnimatedStyle, withSpring, runOnJS } from "react-native-reanimated";
 
 import { ThemedText } from "@/components/ThemedText";
 import { useTheme } from "@/hooks/useTheme";
@@ -29,6 +32,78 @@ type LiveMatchRouteProp = RouteProp<RootStackParamList, "LiveMatch">;
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
 type ActionType = "goal_for" | "goal_against" | "card" | "penalty" | "sub";
+
+interface PlayerPosition {
+  playerId: string;
+  x: number;
+  y: number;
+}
+
+interface DraggablePlayerProps {
+  player: Player;
+  position: { x: number; y: number };
+  pitchDimensions: { width: number; height: number };
+  onPositionChange: (playerId: string, x: number, y: number) => void;
+  onTap: () => void;
+}
+
+function DraggablePlayer({ player, position, pitchDimensions, onPositionChange, onTap }: DraggablePlayerProps) {
+  const translateX = useSharedValue(position.x);
+  const translateY = useSharedValue(position.y);
+  const scale = useSharedValue(1);
+  const startX = useSharedValue(0);
+  const startY = useSharedValue(0);
+
+  useEffect(() => {
+    translateX.value = position.x;
+    translateY.value = position.y;
+  }, [position.x, position.y]);
+
+  const panGesture = Gesture.Pan()
+    .onStart(() => {
+      startX.value = translateX.value;
+      startY.value = translateY.value;
+      scale.value = withSpring(1.2);
+      runOnJS(Haptics.selectionAsync)();
+    })
+    .onUpdate((event) => {
+      const newX = startX.value + event.translationX;
+      const newY = startY.value + event.translationY;
+      const playerSize = 50;
+      translateX.value = Math.max(0, Math.min(pitchDimensions.width - playerSize, newX));
+      translateY.value = Math.max(0, Math.min(pitchDimensions.height - playerSize, newY));
+    })
+    .onEnd(() => {
+      scale.value = withSpring(1);
+      runOnJS(onPositionChange)(player.id, translateX.value, translateY.value);
+    });
+
+  const tapGesture = Gesture.Tap()
+    .onEnd(() => {
+      runOnJS(Haptics.selectionAsync)();
+      runOnJS(onTap)();
+    });
+
+  const composedGesture = Gesture.Race(panGesture, tapGesture);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateX: translateX.value },
+      { translateY: translateY.value },
+      { scale: scale.value },
+    ],
+  }));
+
+  return (
+    <GestureDetector gesture={composedGesture}>
+      <Animated.View style={[styles.draggablePlayerCircle, animatedStyle]}>
+        <ThemedText type="small" style={styles.playerCircleText}>
+          {getPlayerDisplayName(player)}
+        </ThemedText>
+      </Animated.View>
+    </GestureDetector>
+  );
+}
 
 export default function LiveMatchScreen() {
   const insets = useSafeAreaInsets();
@@ -50,6 +125,8 @@ export default function LiveMatchScreen() {
   const [isSecondHalf, setIsSecondHalf] = useState(false);
   const [firstHalfAddedTime, setFirstHalfAddedTime] = useState(0);
   const [secondHalfAddedTime, setSecondHalfAddedTime] = useState(0);
+  const [playerPositions, setPlayerPositions] = useState<PlayerPosition[]>([]);
+  const [pitchDimensions, setPitchDimensions] = useState({ width: 0, height: 0 });
 
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const lastSaveRef = useRef<number>(0);
@@ -393,6 +470,53 @@ export default function LiveMatchScreen() {
   const playersOnPitch = getPlayersOnPitch();
   const substitutes = getSubstitutes();
 
+  const getDefaultPosition = useCallback((index: number, totalPlayers: number): { x: number; y: number } => {
+    const cols = 4;
+    const col = index % cols;
+    const row = Math.floor(index / cols);
+    return {
+      x: 0.15 + col * 0.23,
+      y: 0.15 + row * 0.28,
+    };
+  }, []);
+
+  useEffect(() => {
+    if (playersOnPitch.length > 0 && pitchDimensions.width > 0) {
+      setPlayerPositions((prev) => {
+        const existingIds = new Set(prev.map(p => p.playerId));
+        const currentIds = new Set(playersOnPitch.map(p => p.id));
+        
+        const filtered = prev.filter(p => currentIds.has(p.playerId));
+        
+        const newPositions = playersOnPitch
+          .filter(p => !existingIds.has(p.id))
+          .map((player, idx) => {
+            const totalNew = playersOnPitch.filter(p => !existingIds.has(p.id)).length;
+            const existingCount = filtered.length;
+            const pos = getDefaultPosition(existingCount + idx, playersOnPitch.length);
+            return {
+              playerId: player.id,
+              x: pos.x * pitchDimensions.width,
+              y: pos.y * pitchDimensions.height,
+            };
+          });
+        
+        return [...filtered, ...newPositions];
+      });
+    }
+  }, [playersOnPitch, pitchDimensions, getDefaultPosition]);
+
+  const updatePlayerPosition = useCallback((playerId: string, x: number, y: number) => {
+    setPlayerPositions((prev) => 
+      prev.map(p => p.playerId === playerId ? { ...p, x, y } : p)
+    );
+  }, []);
+
+  const handlePitchLayout = useCallback((event: LayoutChangeEvent) => {
+    const { width, height } = event.nativeEvent.layout;
+    setPitchDimensions({ width, height });
+  }, []);
+
   if (loading || !match || !team) {
     return (
       <View style={[styles.container, { backgroundColor: AppColors.darkBg }]}>
@@ -503,39 +627,35 @@ export default function LiveMatchScreen() {
       </View>
 
       <View style={styles.middleZone}>
-        <View style={styles.pitchContainer}>
-          <View style={styles.pitch}>
+        <GestureHandlerRootView style={styles.pitchContainer}>
+          <View style={styles.pitch} onLayout={handlePitchLayout}>
             <View style={styles.pitchCenterCircle} />
             <View style={styles.pitchCenterLine} />
             <View style={styles.pitchGoalAreaTop} />
             <View style={styles.pitchGoalAreaBottom} />
 
             <View style={styles.playersGrid}>
-              {playersOnPitch.map((player, index) => (
-                <Pressable
-                  key={player.id}
-                  style={[
-                    styles.playerCircle,
-                    {
-                      left: `${15 + (index % 4) * 23}%`,
-                      top: `${15 + Math.floor(index / 4) * 28}%`,
-                    },
-                  ]}
-                  onPress={() => {
-                    Haptics.selectionAsync();
-                    setSelectedPlayer(player);
-                    setCurrentAction("goal_for");
-                    setShowActionSheet(true);
-                  }}
-                >
-                  <ThemedText type="small" style={styles.playerCircleText}>
-                    {getPlayerDisplayName(player)}
-                  </ThemedText>
-                </Pressable>
-              ))}
+              {playersOnPitch.map((player) => {
+                const pos = playerPositions.find(p => p.playerId === player.id);
+                if (!pos) return null;
+                return (
+                  <DraggablePlayer
+                    key={player.id}
+                    player={player}
+                    position={{ x: pos.x, y: pos.y }}
+                    pitchDimensions={pitchDimensions}
+                    onPositionChange={updatePlayerPosition}
+                    onTap={() => {
+                      setSelectedPlayer(player);
+                      setCurrentAction("goal_for");
+                      setShowActionSheet(true);
+                    }}
+                  />
+                );
+              })}
             </View>
           </View>
-        </View>
+        </GestureHandlerRootView>
 
         <View style={styles.benchContainer}>
           <ThemedText type="small" style={styles.benchLabel}>
@@ -1102,6 +1222,7 @@ const styles = StyleSheet.create({
   pitchGoalAreaBottom: { position: "absolute", width: 80, height: 30, borderWidth: 2, borderColor: "rgba(255,255,255,0.3)", borderBottomWidth: 0, left: "50%", marginLeft: -40, bottom: 0 },
   playersGrid: { position: "absolute", width: "100%", height: "100%" },
   playerCircle: { position: "absolute", width: 50, height: 50, borderRadius: 25, backgroundColor: AppColors.pitchGreen, justifyContent: "center", alignItems: "center", borderWidth: 2, borderColor: "#FFFFFF" },
+  draggablePlayerCircle: { position: "absolute", width: 50, height: 50, borderRadius: 25, backgroundColor: AppColors.pitchGreen, justifyContent: "center", alignItems: "center", borderWidth: 2, borderColor: "#FFFFFF" },
   playerCircleText: { color: "#FFFFFF", fontWeight: "700", fontSize: 12 },
   benchContainer: { paddingVertical: Spacing.sm },
   benchLabel: { color: AppColors.textSecondary, marginBottom: Spacing.xs },
