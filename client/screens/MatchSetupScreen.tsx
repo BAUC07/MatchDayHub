@@ -27,7 +27,7 @@ import { Card } from "@/components/Card";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, AppColors, BorderRadius } from "@/constants/theme";
 import { Team, Player, Match, MatchFormat, MatchLocation } from "@/types";
-import { getTeam, saveMatch, generateId } from "@/lib/storage";
+import { getTeam, saveTeam, saveMatch, generateId } from "@/lib/storage";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
@@ -162,6 +162,8 @@ export default function MatchSetupScreen() {
   const [playerStatuses, setPlayerStatuses] = useState<Record<string, PlayerStatus>>({});
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
+  const [newPlayerName, setNewPlayerName] = useState("");
+  const [newPlayerNumber, setNewPlayerNumber] = useState("");
 
   const columnLayouts = useRef<{ starting: LayoutRectangle | null; bench: LayoutRectangle | null }>({
     starting: null,
@@ -191,6 +193,33 @@ export default function MatchSetupScreen() {
       loadTeam();
     }, [loadTeam])
   );
+
+  const handleAddPlayer = useCallback(async () => {
+    if (!team || !newPlayerName.trim()) return;
+
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
+    const number = newPlayerNumber.trim()
+      ? parseInt(newPlayerNumber.trim(), 10)
+      : undefined;
+
+    const newPlayer: Player = {
+      id: generateId(),
+      name: newPlayerName.trim(),
+      squadNumber: number,
+      state: "substitute",
+    };
+
+    const updatedPlayers = [...team.players, newPlayer];
+    const updatedTeam = { ...team, players: updatedPlayers };
+    
+    setTeam(updatedTeam);
+    setPlayerStatuses((prev) => ({ ...prev, [newPlayer.id]: "bench" }));
+    setNewPlayerName("");
+    setNewPlayerNumber("");
+    
+    await saveTeam(updatedTeam);
+  }, [team, newPlayerName, newPlayerNumber]);
 
   const allPlayers = team?.players || [];
   const startingPlayers = allPlayers.filter((p) => playerStatuses[p.id] === "starting");
@@ -543,17 +572,41 @@ export default function MatchSetupScreen() {
             ) : null}
           </View>
         </View>
-      ) : (
-        <Card elevation={2} style={styles.emptyCard}>
-          <Feather name="alert-circle" size={24} color={AppColors.warningYellow} />
-          <ThemedText type="body" style={{ color: AppColors.textSecondary }}>
-            No players in squad
-          </ThemedText>
-          <ThemedText type="small" style={{ color: AppColors.textSecondary }}>
-            Go back to add players to your team first
-          </ThemedText>
-        </Card>
-      )}
+      ) : null}
+
+      <Card elevation={2} style={styles.addPlayerCard}>
+        <ThemedText type="small" style={styles.addPlayerTitle}>
+          {allPlayers.length === 0 ? "ADD PLAYERS TO GET STARTED" : "ADD PLAYER"}
+        </ThemedText>
+        <View style={styles.addPlayerRow}>
+          <TextInput
+            style={[styles.newPlayerNameInput, { color: theme.text }]}
+            value={newPlayerName}
+            onChangeText={setNewPlayerName}
+            placeholder="Player name"
+            placeholderTextColor={AppColors.textDisabled}
+          />
+          <TextInput
+            style={[styles.newPlayerNumberInput, { color: theme.text }]}
+            value={newPlayerNumber}
+            onChangeText={setNewPlayerNumber}
+            placeholder="#"
+            placeholderTextColor={AppColors.textDisabled}
+            keyboardType="number-pad"
+            maxLength={3}
+          />
+          <Pressable
+            style={[
+              styles.addPlayerButton,
+              !newPlayerName.trim() && styles.addPlayerButtonDisabled,
+            ]}
+            onPress={handleAddPlayer}
+            disabled={!newPlayerName.trim()}
+          >
+            <Feather name="plus" size={20} color="#FFFFFF" />
+          </Pressable>
+        </View>
+      </Card>
     </ScrollView>
   );
 }
@@ -724,5 +777,46 @@ const styles = StyleSheet.create({
     padding: Spacing.xl,
     alignItems: "center",
     gap: Spacing.sm,
+  },
+  addPlayerCard: {
+    padding: Spacing.md,
+    marginTop: Spacing.lg,
+  },
+  addPlayerTitle: {
+    color: AppColors.textSecondary,
+    fontWeight: "600",
+    marginBottom: Spacing.sm,
+  },
+  addPlayerRow: {
+    flexDirection: "row",
+    gap: Spacing.sm,
+  },
+  newPlayerNameInput: {
+    flex: 1,
+    height: 44,
+    backgroundColor: AppColors.elevated,
+    borderRadius: BorderRadius.sm,
+    paddingHorizontal: Spacing.md,
+    fontSize: 16,
+  },
+  newPlayerNumberInput: {
+    width: 56,
+    height: 44,
+    backgroundColor: AppColors.elevated,
+    borderRadius: BorderRadius.sm,
+    paddingHorizontal: Spacing.sm,
+    fontSize: 16,
+    textAlign: "center",
+  },
+  addPlayerButton: {
+    width: 44,
+    height: 44,
+    backgroundColor: AppColors.pitchGreen,
+    borderRadius: BorderRadius.sm,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  addPlayerButtonDisabled: {
+    backgroundColor: AppColors.textDisabled,
   },
 });

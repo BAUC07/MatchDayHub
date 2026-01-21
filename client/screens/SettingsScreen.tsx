@@ -146,7 +146,7 @@ export default function SettingsScreen() {
               ]}
               onPress={handleUpgrade}
             >
-              <ThemedText type="button" style={styles.upgradeButtonText}>
+              <ThemedText type="body" style={styles.upgradeButtonText}>
                 Upgrade to Elite
               </ThemedText>
             </Pressable>
