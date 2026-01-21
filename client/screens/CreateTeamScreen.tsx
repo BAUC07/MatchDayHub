@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from "react";
-import { View, StyleSheet, TextInput, Pressable } from "react-native";
+import { View, StyleSheet, TextInput, Pressable, Image } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useNavigation } from "@react-navigation/native";
@@ -7,6 +7,7 @@ import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Feather } from "@expo/vector-icons";
 import { HeaderButton } from "@react-navigation/elements";
 import * as Haptics from "expo-haptics";
+import * as ImagePicker from "expo-image-picker";
 
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import { ThemedText } from "@/components/ThemedText";
@@ -25,9 +26,25 @@ export default function CreateTeamScreen() {
   const navigation = useNavigation<NavigationProp>();
 
   const [teamName, setTeamName] = useState("");
+  const [logoUri, setLogoUri] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   const isValid = teamName.trim().length >= 2;
+
+  const handlePickLogo = useCallback(async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+
+    if (!result.canceled && result.assets[0]) {
+      setLogoUri(result.assets[0].uri);
+    }
+  }, []);
 
   const handleSave = useCallback(async () => {
     if (!isValid || saving) return;
@@ -39,6 +56,7 @@ export default function CreateTeamScreen() {
       const newTeam: Team = {
         id: generateId(),
         name: teamName.trim(),
+        logoUri: logoUri || undefined,
         players: [],
         createdAt: new Date().toISOString(),
         matchesPlayed: 0,
@@ -94,11 +112,24 @@ export default function CreateTeamScreen() {
         },
       ]}
     >
-      <View style={styles.iconContainer}>
+      <Pressable
+        style={styles.iconContainer}
+        onPress={handlePickLogo}
+      >
         <View style={styles.teamIcon}>
-          <Feather name="shield" size={48} color={AppColors.pitchGreen} />
+          {logoUri ? (
+            <Image source={{ uri: logoUri }} style={styles.logoImage} />
+          ) : (
+            <Feather name="shield" size={48} color={AppColors.pitchGreen} />
+          )}
         </View>
-      </View>
+        <View style={styles.editBadge}>
+          <Feather name="camera" size={14} color="#FFFFFF" />
+        </View>
+        <ThemedText type="small" style={styles.logoHint}>
+          Tap to add club logo
+        </ThemedText>
+      </Pressable>
 
       <ThemedText type="small" style={styles.label}>
         TEAM NAME
@@ -121,7 +152,7 @@ export default function CreateTeamScreen() {
         onSubmitEditing={handleSave}
       />
 
-      <ThemedText type="caption" style={styles.hint}>
+      <ThemedText type="small" style={styles.hint}>
         You can add players after creating the team
       </ThemedText>
     </KeyboardAwareScrollViewCompat>
@@ -146,6 +177,29 @@ const styles = StyleSheet.create({
     backgroundColor: AppColors.surface,
     justifyContent: "center",
     alignItems: "center",
+    overflow: "hidden",
+  },
+  logoImage: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+  },
+  editBadge: {
+    position: "absolute",
+    bottom: 24,
+    right: "35%",
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: AppColors.pitchGreen,
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 2,
+    borderColor: AppColors.darkBg,
+  },
+  logoHint: {
+    color: AppColors.textSecondary,
+    marginTop: Spacing.sm,
   },
   label: {
     color: AppColors.textSecondary,

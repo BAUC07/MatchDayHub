@@ -173,7 +173,7 @@ export default function TeamDetailScreen() {
               <View style={styles.statsRow}>
                 <View style={styles.statItem}>
                   <ThemedText type="h3">{team.matchesPlayed}</ThemedText>
-                  <ThemedText type="caption" style={{ color: AppColors.textSecondary }}>
+                  <ThemedText type="small" style={{ color: AppColors.textSecondary }}>
                     Played
                   </ThemedText>
                 </View>
@@ -181,7 +181,7 @@ export default function TeamDetailScreen() {
                   <ThemedText type="h3" style={{ color: AppColors.pitchGreen }}>
                     {team.wins}
                   </ThemedText>
-                  <ThemedText type="caption" style={{ color: AppColors.textSecondary }}>
+                  <ThemedText type="small" style={{ color: AppColors.textSecondary }}>
                     Won
                   </ThemedText>
                 </View>
@@ -189,7 +189,7 @@ export default function TeamDetailScreen() {
                   <ThemedText type="h3" style={{ color: AppColors.warningYellow }}>
                     {team.draws}
                   </ThemedText>
-                  <ThemedText type="caption" style={{ color: AppColors.textSecondary }}>
+                  <ThemedText type="small" style={{ color: AppColors.textSecondary }}>
                     Drawn
                   </ThemedText>
                 </View>
@@ -197,7 +197,7 @@ export default function TeamDetailScreen() {
                   <ThemedText type="h3" style={{ color: AppColors.redCard }}>
                     {team.losses}
                   </ThemedText>
-                  <ThemedText type="caption" style={{ color: AppColors.textSecondary }}>
+                  <ThemedText type="small" style={{ color: AppColors.textSecondary }}>
                     Lost
                   </ThemedText>
                 </View>
@@ -252,7 +252,7 @@ export default function TeamDetailScreen() {
                   onPress={handleEditSquad}
                 >
                   <Feather name="plus" size={18} color="#FFFFFF" />
-                  <ThemedText type="button" style={{ color: "#FFFFFF" }}>
+                  <ThemedText type="body" style={{ color: "#FFFFFF" }}>
                     Add Players
                   </ThemedText>
                 </Pressable>
@@ -281,7 +281,7 @@ export default function TeamDetailScreen() {
           disabled={!hasPlayers}
         >
           <Feather name="play" size={24} color="#FFFFFF" />
-          <ThemedText type="button" style={styles.fabText}>
+          <ThemedText type="body" style={styles.fabText}>
             Start Match
           </ThemedText>
         </Pressable>

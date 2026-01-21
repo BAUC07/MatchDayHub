@@ -10,6 +10,7 @@ export interface Player {
 export interface Team {
   id: string;
   name: string;
+  logoUri?: string;
   players: Player[];
   createdAt: string;
   lastMatchDate?: string;

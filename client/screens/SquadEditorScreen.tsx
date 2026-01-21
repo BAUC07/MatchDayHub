@@ -6,6 +6,7 @@ import {
   Pressable,
   FlatList,
   Alert,
+  Image,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
@@ -14,6 +15,7 @@ import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Feather } from "@expo/vector-icons";
 import { HeaderButton } from "@react-navigation/elements";
 import * as Haptics from "expo-haptics";
+import * as ImagePicker from "expo-image-picker";
 
 import { ThemedText } from "@/components/ThemedText";
 import { Card } from "@/components/Card";
@@ -35,6 +37,7 @@ export default function SquadEditorScreen() {
 
   const [team, setTeam] = useState<Team | null>(null);
   const [players, setPlayers] = useState<Player[]>([]);
+  const [logoUri, setLogoUri] = useState<string | null>(null);
   const [newPlayerName, setNewPlayerName] = useState("");
   const [newPlayerNumber, setNewPlayerNumber] = useState("");
   const [loading, setLoading] = useState(true);
@@ -46,6 +49,7 @@ export default function SquadEditorScreen() {
       if (teamData) {
         setTeam(teamData);
         setPlayers(teamData.players);
+        setLogoUri(teamData.logoUri || null);
       }
     } catch (error) {
       console.error("Error loading team:", error);
@@ -60,12 +64,27 @@ export default function SquadEditorScreen() {
     }, [loadTeam])
   );
 
+  const handlePickLogo = useCallback(async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+
+    if (!result.canceled && result.assets[0]) {
+      setLogoUri(result.assets[0].uri);
+    }
+  }, []);
+
   const handleSave = useCallback(async () => {
     if (!team || saving) return;
 
     setSaving(true);
     try {
-      const updatedTeam = { ...team, players };
+      const updatedTeam = { ...team, players, logoUri: logoUri || undefined };
       await saveTeam(updatedTeam);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       navigation.goBack();
@@ -188,11 +207,31 @@ export default function SquadEditorScreen() {
         keyExtractor={(item) => item.id}
         renderItem={renderPlayerItem}
         ListHeaderComponent={
-          <Card elevation={2} style={styles.addPlayerCard}>
-            <ThemedText type="small" style={styles.addPlayerTitle}>
-              ADD NEW PLAYER
-            </ThemedText>
-            <View style={styles.addPlayerInputs}>
+          <>
+            <Pressable
+              style={styles.logoPickerContainer}
+              onPress={handlePickLogo}
+            >
+              <View style={styles.logoPickerIcon}>
+                {logoUri ? (
+                  <Image source={{ uri: logoUri }} style={styles.logoImage} />
+                ) : (
+                  <Feather name="shield" size={40} color={AppColors.pitchGreen} />
+                )}
+              </View>
+              <View style={styles.logoEditBadge}>
+                <Feather name="camera" size={12} color="#FFFFFF" />
+              </View>
+              <ThemedText type="small" style={styles.logoHint}>
+                {logoUri ? "Change club logo" : "Add club logo"}
+              </ThemedText>
+            </Pressable>
+
+            <Card elevation={2} style={styles.addPlayerCard}>
+              <ThemedText type="small" style={styles.addPlayerTitle}>
+                ADD NEW PLAYER
+              </ThemedText>
+              <View style={styles.addPlayerInputs}>
               <TextInput
                 style={[styles.nameInput, { color: theme.text }]}
                 value={newPlayerName}
@@ -222,10 +261,11 @@ export default function SquadEditorScreen() {
                 <Feather name="plus" size={20} color="#FFFFFF" />
               </Pressable>
             </View>
-            <ThemedText type="caption" style={styles.hint}>
-              You'll select starting lineup when setting up a match
-            </ThemedText>
-          </Card>
+            <ThemedText type="small" style={styles.hint}>
+                You'll select starting lineup when setting up a match
+              </ThemedText>
+            </Card>
+          </>
         }
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
@@ -258,6 +298,41 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
+  },
+  logoPickerContainer: {
+    alignItems: "center",
+    marginBottom: Spacing.xl,
+  },
+  logoPickerIcon: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: AppColors.surface,
+    justifyContent: "center",
+    alignItems: "center",
+    overflow: "hidden",
+  },
+  logoImage: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+  },
+  logoEditBadge: {
+    position: "absolute",
+    top: 56,
+    right: "38%",
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: AppColors.pitchGreen,
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 2,
+    borderColor: AppColors.darkBg,
+  },
+  logoHint: {
+    color: AppColors.textSecondary,
+    marginTop: Spacing.sm,
   },
   addPlayerCard: {
     padding: Spacing.lg,
@@ -335,7 +410,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   separator: {
-    height: Spacing.sm,
+    height: Spacing.xs,
   },
   emptyContainer: {
     alignItems: "center",

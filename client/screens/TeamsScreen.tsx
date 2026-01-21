@@ -3,10 +3,11 @@ import {
   View,
   FlatList,
   StyleSheet,
-  Image,
+  Image as RNImage,
   Pressable,
   RefreshControl,
 } from "react-native";
+import { Image } from "expo-image";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
@@ -95,7 +96,11 @@ export default function TeamsScreen() {
       >
         <View style={styles.teamCardContent}>
           <View style={styles.teamBadge}>
-            <Feather name="shield" size={32} color={AppColors.pitchGreen} />
+            {item.logoUri ? (
+              <Image source={{ uri: item.logoUri }} style={styles.teamLogoImage} />
+            ) : (
+              <Feather name="shield" size={32} color={AppColors.pitchGreen} />
+            )}
           </View>
           <View style={styles.teamInfo}>
             <ThemedText type="h4" style={styles.teamName}>
@@ -109,7 +114,7 @@ export default function TeamsScreen() {
             </ThemedText>
             {item.matchesPlayed > 0 ? (
               <ThemedText
-                type="caption"
+                type="small"
                 style={{ color: AppColors.textSecondary, marginTop: 4 }}
               >
                 W{item.wins} D{item.draws} L{item.losses}
@@ -285,6 +290,12 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     marginRight: Spacing.lg,
+    overflow: "hidden",
+  },
+  teamLogoImage: {
+    width: 56,
+    height: 56,
+    borderRadius: BorderRadius.md,
   },
   teamInfo: {
     flex: 1,
