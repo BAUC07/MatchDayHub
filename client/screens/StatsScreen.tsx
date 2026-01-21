@@ -23,7 +23,7 @@ import { ThemedView } from "@/components/ThemedView";
 import { Card } from "@/components/Card";
 import { Spacing, AppColors, BorderRadius } from "@/constants/theme";
 import { Match, MatchEvent, Team, Player, SubscriptionState } from "@/types";
-import { getMatches, getTeams, getSubscription } from "@/lib/storage";
+import { getMatches, getTeams, getSubscription, saveSubscription } from "@/lib/storage";
 
 type FilterType = "all" | "home" | "away";
 
@@ -79,6 +79,13 @@ export default function StatsScreen() {
     } finally {
       setLoading(false);
     }
+  }, []);
+
+  const handleUpgrade = useCallback(async () => {
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    const newSub = { isElite: true, maxTeams: 999 };
+    await saveSubscription(newSub);
+    setSubscription(newSub);
   }, []);
 
   useFocusEffect(
@@ -791,7 +798,13 @@ export default function StatsScreen() {
               <ThemedText type="body" style={styles.lockedFeatureText}>Minutes played tracking</ThemedText>
             </View>
           </View>
-          <Pressable style={styles.upgradeButton}>
+          <Pressable 
+            style={({ pressed }) => [
+              styles.upgradeButton,
+              { opacity: pressed ? 0.8 : 1 },
+            ]}
+            onPress={handleUpgrade}
+          >
             <ThemedText type="body" style={styles.upgradeButtonText}>
               Upgrade to Elite
             </ThemedText>
