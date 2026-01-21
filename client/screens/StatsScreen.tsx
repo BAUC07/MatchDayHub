@@ -5,6 +5,8 @@ import {
   StyleSheet,
   Pressable,
   Dimensions,
+  Platform,
+  Alert,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
@@ -12,6 +14,9 @@ import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 import { useFocusEffect } from "@react-navigation/native";
 import { Feather } from "@expo/vector-icons";
 import Svg, { Path, Circle, G, Text as SvgText } from "react-native-svg";
+import * as Print from "expo-print";
+import * as Sharing from "expo-sharing";
+import * as Haptics from "expo-haptics";
 
 import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
@@ -242,6 +247,162 @@ export default function StatsScreen() {
       .sort((a, b) => b.count - a.count)
       .slice(0, 10);
   })();
+
+  const handleExportPDF = useCallback(async () => {
+    if (!selectedTeam) return;
+
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
+    const totalGoals = resultsData.wins + resultsData.draws + resultsData.losses > 0
+      ? filteredMatches.reduce((sum, m) => sum + m.scoreFor, 0)
+      : 0;
+    const totalConceded = filteredMatches.reduce((sum, m) => sum + m.scoreAgainst, 0);
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <style>
+            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 40px; background: #fff; color: #333; }
+            h1 { color: #00A86B; border-bottom: 3px solid #00A86B; padding-bottom: 10px; }
+            h2 { color: #555; margin-top: 30px; border-bottom: 1px solid #ddd; padding-bottom: 5px; }
+            .stats-grid { display: flex; flex-wrap: wrap; gap: 20px; margin: 20px 0; }
+            .stat-box { background: #f5f5f5; padding: 20px; border-radius: 8px; min-width: 120px; text-align: center; }
+            .stat-value { font-size: 32px; font-weight: bold; color: #00A86B; }
+            .stat-label { font-size: 12px; color: #666; text-transform: uppercase; }
+            table { width: 100%; border-collapse: collapse; margin: 15px 0; }
+            th, td { padding: 10px; text-align: left; border-bottom: 1px solid #ddd; }
+            th { background: #f5f5f5; font-weight: 600; }
+            .number { text-align: center; width: 50px; }
+            .footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #ddd; color: #999; font-size: 12px; text-align: center; }
+          </style>
+        </head>
+        <body>
+          <h1>${selectedTeam.name} - Season Statistics</h1>
+          <p style="color: #666;">Generated on ${new Date().toLocaleDateString()}</p>
+          
+          <h2>Results Overview</h2>
+          <div class="stats-grid">
+            <div class="stat-box">
+              <div class="stat-value">${filteredMatches.length}</div>
+              <div class="stat-label">Matches Played</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-value" style="color: #4CAF50">${resultsData.wins}</div>
+              <div class="stat-label">Wins</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-value" style="color: #FF9800">${resultsData.draws}</div>
+              <div class="stat-label">Draws</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-value" style="color: #f44336">${resultsData.losses}</div>
+              <div class="stat-label">Losses</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-value">${totalGoals}</div>
+              <div class="stat-label">Goals Scored</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-value">${totalConceded}</div>
+              <div class="stat-label">Goals Conceded</div>
+            </div>
+          </div>
+
+          <h2>Goal Sources</h2>
+          <div class="stats-grid">
+            <div class="stat-box">
+              <div class="stat-value">${goalsData.openPlay}</div>
+              <div class="stat-label">Open Play</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-value">${goalsData.corner}</div>
+              <div class="stat-label">Corners</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-value">${goalsData.freeKick}</div>
+              <div class="stat-label">Free Kicks</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-value">${goalsData.penalty}</div>
+              <div class="stat-label">Penalties</div>
+            </div>
+          </div>
+
+          ${topScorers.length > 0 ? `
+          <h2>Top Scorers</h2>
+          <table>
+            <tr><th class="number">#</th><th>Player</th><th class="number">Goals</th></tr>
+            ${topScorers.map((p, i) => `
+              <tr>
+                <td class="number">${i + 1}</td>
+                <td>${p.squadNumber ? p.squadNumber + '. ' : ''}${p.playerName}</td>
+                <td class="number">${p.count}</td>
+              </tr>
+            `).join('')}
+          </table>
+          ` : ''}
+
+          ${topAssists.length > 0 ? `
+          <h2>Top Assists</h2>
+          <table>
+            <tr><th class="number">#</th><th>Player</th><th class="number">Assists</th></tr>
+            ${topAssists.map((p, i) => `
+              <tr>
+                <td class="number">${i + 1}</td>
+                <td>${p.squadNumber ? p.squadNumber + '. ' : ''}${p.playerName}</td>
+                <td class="number">${p.count}</td>
+              </tr>
+            `).join('')}
+          </table>
+          ` : ''}
+
+          ${cardsReceived.length > 0 ? `
+          <h2>Disciplinary Record</h2>
+          <table>
+            <tr><th class="number">#</th><th>Player</th><th class="number" style="color: #FFD700">Yellow</th><th class="number" style="color: #DC143C">Red</th></tr>
+            ${cardsReceived.map((p: any, i: number) => `
+              <tr>
+                <td class="number">${i + 1}</td>
+                <td>${p.squadNumber ? p.squadNumber + '. ' : ''}${p.playerName}</td>
+                <td class="number">${p.yellowCards}</td>
+                <td class="number">${p.redCards}</td>
+              </tr>
+            `).join('')}
+          </table>
+          ` : ''}
+
+          <div class="footer">
+            MatchDay - Grassroots Football Match Logger
+          </div>
+        </body>
+      </html>
+    `;
+
+    try {
+      const { uri } = await Print.printToFileAsync({ html });
+      
+      if (Platform.OS === "web") {
+        Alert.alert("PDF Generated", "PDF export is not fully supported on web. Please use the mobile app for PDF export.");
+        return;
+      }
+      
+      const isSharingAvailable = await Sharing.isAvailableAsync();
+      if (isSharingAvailable) {
+        await Sharing.shareAsync(uri, {
+          mimeType: "application/pdf",
+          dialogTitle: `${selectedTeam.name} Statistics`,
+          UTI: "com.adobe.pdf",
+        });
+      } else {
+        Alert.alert("Success", "PDF has been generated successfully.");
+      }
+    } catch (error) {
+      console.error("Error generating PDF:", error);
+      Alert.alert("Error", "Failed to generate PDF. Please try again.");
+    }
+  }, [selectedTeam, filteredMatches, resultsData, goalsData, topScorers, topAssists, cardsReceived]);
 
   const renderPieChart = (
     data: { value: number; color: string; label: string }[],
@@ -542,9 +703,23 @@ export default function StatsScreen() {
         ]}
         showsVerticalScrollIndicator={false}
       >
-        <ThemedText type="h2" style={styles.screenTitle}>
-          Statistics
-        </ThemedText>
+        <View style={styles.headerRow}>
+          <ThemedText type="h2" style={styles.screenTitle}>
+            Statistics
+          </ThemedText>
+          <Pressable
+            style={({ pressed }) => [
+              styles.exportButton,
+              { opacity: pressed ? 0.7 : 1 },
+            ]}
+            onPress={handleExportPDF}
+          >
+            <Feather name="download" size={18} color="#FFFFFF" />
+            <ThemedText type="small" style={styles.exportButtonText}>
+              Export
+            </ThemedText>
+          </Pressable>
+        </View>
 
         {teams.length > 1 ? (
           <View style={styles.teamSelectorContainer}>
@@ -667,7 +842,23 @@ const styles = StyleSheet.create({
     fontWeight: "700" 
   },
   scrollContent: { paddingHorizontal: Spacing.lg },
-  screenTitle: { marginBottom: Spacing.md },
+  headerRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: Spacing.md,
+  },
+  screenTitle: { flex: 1 },
+  exportButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.xs,
+    backgroundColor: AppColors.pitchGreen,
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    borderRadius: BorderRadius.sm,
+  },
+  exportButtonText: { color: "#FFFFFF", fontWeight: "600" },
   teamSelectorContainer: { marginBottom: Spacing.md },
   teamSelectorScroll: { gap: Spacing.sm },
   teamSelectorButton: {
