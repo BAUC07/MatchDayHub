@@ -32,10 +32,18 @@ interface PlayerStat {
   playerName: string;
   squadNumber?: number;
   count: number;
+  matches: number;
 }
 
 interface MinutesStat extends PlayerStat {
-  matches: number;
+  avgPerGame: number;
+}
+
+interface GoalsConcededStat {
+  matchesPlayed: number;
+  totalConceded: number;
+  avgPerGame: number;
+  cleanSheets: number;
 }
 
 export default function StatsScreen() {
@@ -133,58 +141,67 @@ export default function StatsScreen() {
   })();
 
   const topScorers: PlayerStat[] = (() => {
-    const scorerMap = new Map<string, number>();
+    const scorerMap = new Map<string, { goals: number; matchIds: Set<string> }>();
     
     filteredMatches.forEach((match) => {
       match.events.forEach((event) => {
         if (event.type === "goal_for" && event.playerId) {
-          scorerMap.set(event.playerId, (scorerMap.get(event.playerId) || 0) + 1);
+          const current = scorerMap.get(event.playerId) || { goals: 0, matchIds: new Set<string>() };
+          current.goals++;
+          current.matchIds.add(match.id);
+          scorerMap.set(event.playerId, current);
         }
       });
     });
 
     return Array.from(scorerMap.entries())
-      .map(([playerId, count]) => ({
+      .map(([playerId, data]) => ({
         playerId,
         playerName: getPlayerName(playerId),
         squadNumber: getPlayerSquadNumber(playerId),
-        count,
+        count: data.goals,
+        matches: data.matchIds.size,
       }))
       .sort((a, b) => b.count - a.count)
       .slice(0, 10);
   })();
 
   const topAssists: PlayerStat[] = (() => {
-    const assistMap = new Map<string, number>();
+    const assistMap = new Map<string, { assists: number; matchIds: Set<string> }>();
     
     filteredMatches.forEach((match) => {
       match.events.forEach((event) => {
         if (event.type === "goal_for" && event.assistPlayerId) {
-          assistMap.set(event.assistPlayerId, (assistMap.get(event.assistPlayerId) || 0) + 1);
+          const current = assistMap.get(event.assistPlayerId) || { assists: 0, matchIds: new Set<string>() };
+          current.assists++;
+          current.matchIds.add(match.id);
+          assistMap.set(event.assistPlayerId, current);
         }
       });
     });
 
     return Array.from(assistMap.entries())
-      .map(([playerId, count]) => ({
+      .map(([playerId, data]) => ({
         playerId,
         playerName: getPlayerName(playerId),
         squadNumber: getPlayerSquadNumber(playerId),
-        count,
+        count: data.assists,
+        matches: data.matchIds.size,
       }))
       .sort((a, b) => b.count - a.count)
       .slice(0, 10);
   })();
 
-  const cardsReceived: PlayerStat[] = (() => {
-    const cardMap = new Map<string, { yellow: number; red: number }>();
+  const cardsReceived = (() => {
+    const cardMap = new Map<string, { yellow: number; red: number; matchIds: Set<string> }>();
     
     filteredMatches.forEach((match) => {
       match.events.forEach((event) => {
         if (event.type === "card" && event.playerId && event.isForTeam) {
-          const current = cardMap.get(event.playerId) || { yellow: 0, red: 0 };
+          const current = cardMap.get(event.playerId) || { yellow: 0, red: 0, matchIds: new Set<string>() };
           if (event.cardType === "yellow") current.yellow++;
           if (event.cardType === "red") current.red++;
+          current.matchIds.add(match.id);
           cardMap.set(event.playerId, current);
         }
       });
@@ -196,11 +213,21 @@ export default function StatsScreen() {
         playerName: getPlayerName(playerId),
         squadNumber: getPlayerSquadNumber(playerId),
         count: cards.yellow + cards.red * 2,
+        matches: cards.matchIds.size,
         yellowCards: cards.yellow,
         redCards: cards.red,
       }))
       .sort((a, b) => b.count - a.count)
       .slice(0, 10);
+  })();
+
+  const goalsConceded: GoalsConcededStat = (() => {
+    const matchesPlayed = filteredMatches.length;
+    const totalConceded = filteredMatches.reduce((sum, m) => sum + m.scoreAgainst, 0);
+    const cleanSheets = filteredMatches.filter((m) => m.scoreAgainst === 0).length;
+    const avgPerGame = matchesPlayed > 0 ? totalConceded / matchesPlayed : 0;
+    
+    return { matchesPlayed, totalConceded, avgPerGame, cleanSheets };
   })();
 
   const playerMinutes: MinutesStat[] = (() => {
@@ -246,6 +273,7 @@ export default function StatsScreen() {
         squadNumber: getPlayerSquadNumber(playerId),
         count: Math.round(data.minutes),
         matches: data.matches,
+        avgPerGame: data.matches > 0 ? Math.round(data.minutes / data.matches) : 0,
       }))
       .sort((a, b) => b.count - a.count)
       .slice(0, 10);
@@ -333,15 +361,36 @@ export default function StatsScreen() {
             </div>
           </div>
 
+          <h2>Defensive Record</h2>
+          <div class="stats-grid">
+            <div class="stat-box">
+              <div class="stat-value">${goalsConceded.matchesPlayed}</div>
+              <div class="stat-label">Matches</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-value" style="color: #f44336">${goalsConceded.totalConceded}</div>
+              <div class="stat-label">Conceded</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-value" style="color: #666">${goalsConceded.avgPerGame.toFixed(1)}</div>
+              <div class="stat-label">Per Game</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-value" style="color: #00A86B">${goalsConceded.cleanSheets}</div>
+              <div class="stat-label">Clean Sheets</div>
+            </div>
+          </div>
+
           ${topScorers.length > 0 ? `
           <h2>Top Scorers</h2>
           <table>
-            <tr><th class="number">#</th><th>Player</th><th class="number">Goals</th></tr>
+            <tr><th class="number">#</th><th>Player</th><th class="number">Goals</th><th class="number">Avg</th></tr>
             ${topScorers.map((p, i) => `
               <tr>
                 <td class="number">${i + 1}</td>
                 <td>${p.squadNumber ? p.squadNumber + '. ' : ''}${p.playerName}</td>
                 <td class="number">${p.count}</td>
+                <td class="number" style="color: #666">${p.matches > 0 ? (p.count / p.matches).toFixed(1) : '0.0'}</td>
               </tr>
             `).join('')}
           </table>
@@ -350,12 +399,13 @@ export default function StatsScreen() {
           ${topAssists.length > 0 ? `
           <h2>Top Assists</h2>
           <table>
-            <tr><th class="number">#</th><th>Player</th><th class="number">Assists</th></tr>
+            <tr><th class="number">#</th><th>Player</th><th class="number">Assists</th><th class="number">Avg</th></tr>
             ${topAssists.map((p, i) => `
               <tr>
                 <td class="number">${i + 1}</td>
                 <td>${p.squadNumber ? p.squadNumber + '. ' : ''}${p.playerName}</td>
                 <td class="number">${p.count}</td>
+                <td class="number" style="color: #666">${p.matches > 0 ? (p.count / p.matches).toFixed(1) : '0.0'}</td>
               </tr>
             `).join('')}
           </table>
@@ -405,7 +455,7 @@ export default function StatsScreen() {
       console.error("Error generating PDF:", error);
       Alert.alert("Error", "Failed to generate PDF. Please try again.");
     }
-  }, [selectedTeam, filteredMatches, resultsData, goalsData, topScorers, topAssists, cardsReceived]);
+  }, [selectedTeam, filteredMatches, resultsData, goalsData, goalsConceded, topScorers, topAssists, cardsReceived]);
 
   const renderPieChart = (
     data: { value: number; color: string; label: string }[],
@@ -532,22 +582,73 @@ export default function StatsScreen() {
             <ThemedText type="small" style={[styles.tableHeaderCell, styles.valueCell]}>
               {valueLabel}
             </ThemedText>
+            <ThemedText type="small" style={[styles.tableHeaderCell, styles.avgCell]}>
+              Avg
+            </ThemedText>
           </View>
-          {data.map((item, index) => (
-            <View key={item.playerId} style={styles.tableRow}>
-              <ThemedText type="body" style={[styles.tableCell, styles.rankCell]}>
-                {index + 1}
-              </ThemedText>
-              <ThemedText type="body" style={[styles.tableCell, styles.playerCell]} numberOfLines={1}>
-                {item.squadNumber ? `${item.squadNumber}. ` : ""}{item.playerName}
-              </ThemedText>
-              <ThemedText type="body" style={[styles.tableCell, styles.valueCell]}>
-                {item.count}
-              </ThemedText>
-            </View>
-          ))}
+          {data.map((item, index) => {
+            const avg = item.matches > 0 ? (item.count / item.matches).toFixed(1) : "0.0";
+            return (
+              <View key={item.playerId} style={styles.tableRow}>
+                <ThemedText type="body" style={[styles.tableCell, styles.rankCell]}>
+                  {index + 1}
+                </ThemedText>
+                <ThemedText type="body" style={[styles.tableCell, styles.playerCell]} numberOfLines={1}>
+                  {item.squadNumber ? `${item.squadNumber}. ` : ""}{item.playerName}
+                </ThemedText>
+                <ThemedText type="body" style={[styles.tableCell, styles.valueCell]}>
+                  {item.count}
+                </ThemedText>
+                <ThemedText type="body" style={[styles.tableCell, styles.avgCell, { color: AppColors.textSecondary }]}>
+                  {avg}
+                </ThemedText>
+              </View>
+            );
+          })}
         </View>
       )}
+    </Card>
+  );
+
+  const renderGoalsConceded = () => (
+    <Card elevation={1} style={styles.tableCard}>
+      <ThemedText type="h4" style={styles.tableTitle}>
+        Goals Conceded
+      </ThemedText>
+      <View style={styles.concededGrid}>
+        <View style={styles.concededItem}>
+          <ThemedText type="h3" style={styles.concededValue}>
+            {goalsConceded.matchesPlayed}
+          </ThemedText>
+          <ThemedText type="caption" style={styles.concededLabel}>
+            Played
+          </ThemedText>
+        </View>
+        <View style={styles.concededItem}>
+          <ThemedText type="h3" style={[styles.concededValue, { color: AppColors.redCard }]}>
+            {goalsConceded.totalConceded}
+          </ThemedText>
+          <ThemedText type="caption" style={styles.concededLabel}>
+            Conceded
+          </ThemedText>
+        </View>
+        <View style={styles.concededItem}>
+          <ThemedText type="h3" style={[styles.concededValue, { color: AppColors.textSecondary }]}>
+            {goalsConceded.avgPerGame.toFixed(1)}
+          </ThemedText>
+          <ThemedText type="caption" style={styles.concededLabel}>
+            Per Game
+          </ThemedText>
+        </View>
+        <View style={styles.concededItem}>
+          <ThemedText type="h3" style={[styles.concededValue, { color: AppColors.pitchGreen }]}>
+            {goalsConceded.cleanSheets}
+          </ThemedText>
+          <ThemedText type="caption" style={styles.concededLabel}>
+            Clean Sheets
+          </ThemedText>
+        </View>
+      </View>
     </Card>
   );
 
@@ -621,6 +722,9 @@ export default function StatsScreen() {
             <ThemedText type="small" style={[styles.tableHeaderCell, styles.cardCell]}>
               MP
             </ThemedText>
+            <ThemedText type="small" style={[styles.tableHeaderCell, styles.avgCell]}>
+              Avg
+            </ThemedText>
           </View>
           {playerMinutes.map((item, index) => (
             <View key={item.playerId} style={styles.tableRow}>
@@ -635,6 +739,9 @@ export default function StatsScreen() {
               </ThemedText>
               <ThemedText type="body" style={[styles.tableCell, styles.cardCell]}>
                 {item.matches}
+              </ThemedText>
+              <ThemedText type="body" style={[styles.tableCell, styles.avgCell, { color: AppColors.textSecondary }]}>
+                {item.avgPerGame}
               </ThemedText>
             </View>
           ))}
@@ -785,6 +892,7 @@ export default function StatsScreen() {
           ])}
         </Card>
 
+        {renderGoalsConceded()}
         {renderTable("Top Scorers", topScorers, "Goals")}
         {renderTable("Top Assists", topAssists, "Assists")}
         {renderCardsTable()}
@@ -910,4 +1018,23 @@ const styles = StyleSheet.create({
   playerCell: { flex: 1, paddingRight: Spacing.sm },
   valueCell: { width: 50, textAlign: "center" },
   cardCell: { width: 30, textAlign: "center" },
+  avgCell: { width: 40, textAlign: "center" },
+  concededGrid: { 
+    flexDirection: "row", 
+    justifyContent: "space-between", 
+    flexWrap: "wrap" 
+  },
+  concededItem: { 
+    alignItems: "center", 
+    minWidth: 70, 
+    paddingVertical: Spacing.sm 
+  },
+  concededValue: { 
+    textAlign: "center" 
+  },
+  concededLabel: { 
+    color: AppColors.textSecondary, 
+    textAlign: "center", 
+    marginTop: Spacing.xs 
+  },
 });

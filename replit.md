@@ -73,10 +73,11 @@ MVP complete with core functionality:
 - Filter by All/Home/Away matches
 - Results pie chart (wins, draws, losses)
 - Goal Sources pie chart (open play, corner, free kick, penalty)
-- Top Scorers table with goal counts
-- Top Assists table with assist counts
+- Goals Conceded section (matches, total conceded, avg per game, clean sheets)
+- Top Scorers table with goals and average per game
+- Top Assists table with assists and average per game
 - Cards Received table (yellow and red card breakdown)
-- Minutes Played table with match appearances
+- Minutes Played table with total minutes, matches played, and average per game
 - PDF export button to generate and share season statistics
 
 ### Match Summary
