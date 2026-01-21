@@ -209,8 +209,10 @@ export default function LiveMatchScreen() {
         if (e.playerOnId) onPitchIds.add(e.playerOnId);
       });
 
+    // Include both original subs AND players who were subbed off (now available again)
+    const availablePlayerIds = new Set([...match.substitutes, ...match.startingLineup]);
     return team.players.filter(
-      (p) => !onPitchIds.has(p.id) && match.substitutes.includes(p.id)
+      (p) => !onPitchIds.has(p.id) && availablePlayerIds.has(p.id)
     );
   }, [team, match]);
 
@@ -416,13 +418,13 @@ export default function LiveMatchScreen() {
         </View>
 
         <View style={styles.scoreSection}>
-          <ThemedText type="hero" style={styles.scoreText}>
+          <ThemedText type="h1" style={styles.scoreText}>
             {match.scoreFor}
           </ThemedText>
           <ThemedText type="h3" style={styles.scoreDivider}>
             -
           </ThemedText>
-          <ThemedText type="hero" style={styles.scoreText}>
+          <ThemedText type="h1" style={styles.scoreText}>
             {match.scoreAgainst}
           </ThemedText>
         </View>
@@ -481,7 +483,7 @@ export default function LiveMatchScreen() {
         </View>
       ) : (
         <View style={styles.periodIndicator}>
-          <ThemedText type="caption" style={{ color: AppColors.textSecondary }}>
+          <ThemedText type="small" style={{ color: AppColors.textSecondary }}>
             {isSecondHalf ? "2nd Half" : "1st Half"}
           </ThemedText>
         </View>
@@ -535,7 +537,7 @@ export default function LiveMatchScreen() {
         </View>
 
         <View style={styles.benchContainer}>
-          <ThemedText type="caption" style={styles.benchLabel}>
+          <ThemedText type="small" style={styles.benchLabel}>
             BENCH
           </ThemedText>
           <FlatList
@@ -546,14 +548,14 @@ export default function LiveMatchScreen() {
             contentContainerStyle={styles.benchList}
             renderItem={({ item }) => (
               <View style={styles.benchPlayer}>
-                <ThemedText type="caption" style={styles.benchPlayerText}>
+                <ThemedText type="small" style={styles.benchPlayerText}>
                   {getPlayerDisplayName(item)}
                 </ThemedText>
               </View>
             )}
             ListEmptyComponent={
               <ThemedText
-                type="caption"
+                type="small"
                 style={{ color: AppColors.textDisabled }}
               >
                 No subs available
@@ -573,7 +575,7 @@ export default function LiveMatchScreen() {
             ]}
             onPress={() => openActionSheet("goal_for")}
           >
-            <ThemedText type="button" style={styles.actionButtonText}>
+            <ThemedText type="body" style={styles.actionButtonText}>
               GOAL +
             </ThemedText>
           </Pressable>
@@ -586,7 +588,7 @@ export default function LiveMatchScreen() {
             ]}
             onPress={() => openActionSheet("goal_against")}
           >
-            <ThemedText type="button" style={styles.actionButtonText}>
+            <ThemedText type="body" style={styles.actionButtonText}>
               GOAL -
             </ThemedText>
           </Pressable>
@@ -599,7 +601,7 @@ export default function LiveMatchScreen() {
             ]}
             onPress={() => openActionSheet("card")}
           >
-            <ThemedText type="button" style={styles.actionButtonText}>
+            <ThemedText type="body" style={styles.actionButtonText}>
               CARD
             </ThemedText>
           </Pressable>
@@ -614,7 +616,7 @@ export default function LiveMatchScreen() {
             ]}
             onPress={() => openActionSheet("sub")}
           >
-            <ThemedText type="button" style={styles.actionButtonText}>
+            <ThemedText type="body" style={styles.actionButtonText}>
               SUB
             </ThemedText>
           </Pressable>
@@ -627,7 +629,7 @@ export default function LiveMatchScreen() {
             ]}
             onPress={() => openActionSheet("penalty")}
           >
-            <ThemedText type="button" style={styles.actionButtonText}>
+            <ThemedText type="body" style={styles.actionButtonText}>
               PENALTY
             </ThemedText>
           </Pressable>
@@ -640,7 +642,7 @@ export default function LiveMatchScreen() {
             ]}
             onPress={isSecondHalf ? handleEndMatch : handleHalfTime}
           >
-            <ThemedText type="button" style={styles.actionButtonText}>
+            <ThemedText type="body" style={styles.actionButtonText}>
               {isSecondHalf ? "END" : "HT"}
             </ThemedText>
           </Pressable>
@@ -677,10 +679,10 @@ export default function LiveMatchScreen() {
             </ThemedText>
             <View style={confirmStyles.buttons}>
               <Pressable style={confirmStyles.cancelButton} onPress={() => setShowEndConfirm(false)}>
-                <ThemedText type="button" style={confirmStyles.cancelText}>Cancel</ThemedText>
+                <ThemedText type="body" style={confirmStyles.cancelText}>Cancel</ThemedText>
               </Pressable>
               <Pressable style={confirmStyles.confirmButton} onPress={confirmEndMatch}>
-                <ThemedText type="button" style={confirmStyles.confirmText}>Yes, End Game</ThemedText>
+                <ThemedText type="body" style={confirmStyles.confirmText}>Yes, End Game</ThemedText>
               </Pressable>
             </View>
           </View>
@@ -749,7 +751,7 @@ function ActionSheet({
           onPress={() => { Haptics.selectionAsync(); onSelect(null as any); }}
         >
           <ThemedText type="body" style={sheetStyles.playerOptionText}>-</ThemedText>
-          <ThemedText type="caption" style={{ color: AppColors.textSecondary }}>None</ThemedText>
+          <ThemedText type="small" style={{ color: AppColors.textSecondary }}>None</ThemedText>
         </Pressable>
       ) : null}
       {playerList.map((item) => (
@@ -759,7 +761,7 @@ function ActionSheet({
           onPress={() => { Haptics.selectionAsync(); onSelect(item); }}
         >
           <ThemedText type="body" style={sheetStyles.playerOptionText}>{getPlayerDisplayName(item)}</ThemedText>
-          <ThemedText type="caption" numberOfLines={1} style={{ color: AppColors.textSecondary }}>{item.name}</ThemedText>
+          <ThemedText type="small" numberOfLines={1} style={{ color: AppColors.textSecondary }}>{item.name}</ThemedText>
         </Pressable>
       ))}
     </View>
@@ -777,7 +779,7 @@ function ActionSheet({
               onPress={() => scorer && setStep(1)}
               disabled={!scorer}
             >
-              <ThemedText type="button" style={sheetStyles.confirmButtonText}>Next</ThemedText>
+              <ThemedText type="body" style={sheetStyles.confirmButtonText}>Next</ThemedText>
             </Pressable>
           </ScrollView>
         );
@@ -787,7 +789,7 @@ function ActionSheet({
             <ThemedText type="h4" style={sheetStyles.title}>Who assisted?</ThemedText>
             {renderPlayerGrid(players.filter(p => p.id !== scorer?.id), assist, setAssist, true)}
             <Pressable style={sheetStyles.confirmButton} onPress={() => setStep(2)}>
-              <ThemedText type="button" style={sheetStyles.confirmButtonText}>{assist ? "Next" : "Skip"}</ThemedText>
+              <ThemedText type="body" style={sheetStyles.confirmButtonText}>{assist ? "Next" : "Skip"}</ThemedText>
             </Pressable>
           </ScrollView>
         );
@@ -809,7 +811,7 @@ function ActionSheet({
               ))}
             </View>
             <Pressable style={sheetStyles.confirmButton} onPress={() => scorer && onGoalFor(scorer, goalType, assist || undefined)}>
-              <ThemedText type="button" style={sheetStyles.confirmButtonText}>Confirm Goal</ThemedText>
+              <ThemedText type="body" style={sheetStyles.confirmButtonText}>Confirm Goal</ThemedText>
             </Pressable>
           </View>
         );
@@ -834,7 +836,7 @@ function ActionSheet({
             ))}
           </View>
           <Pressable style={sheetStyles.confirmButton} onPress={() => onGoalAgainst(goalType)}>
-            <ThemedText type="button" style={sheetStyles.confirmButtonText}>Confirm</ThemedText>
+            <ThemedText type="body" style={sheetStyles.confirmButtonText}>Confirm</ThemedText>
           </Pressable>
         </View>
       );
@@ -851,7 +853,7 @@ function ActionSheet({
               onPress={() => scorer && setStep(1)}
               disabled={!scorer}
             >
-              <ThemedText type="button" style={sheetStyles.confirmButtonText}>Next</ThemedText>
+              <ThemedText type="body" style={sheetStyles.confirmButtonText}>Next</ThemedText>
             </Pressable>
           </ScrollView>
         );
@@ -864,17 +866,17 @@ function ActionSheet({
                 style={[sheetStyles.cardOption, { backgroundColor: AppColors.warningYellow }, cardType === "yellow" && sheetStyles.cardOptionSelected]}
                 onPress={() => { Haptics.selectionAsync(); setCardType("yellow"); }}
               >
-                <ThemedText type="button" style={{ color: "#000" }}>Yellow</ThemedText>
+                <ThemedText type="body" style={{ color: "#000" }}>Yellow</ThemedText>
               </Pressable>
               <Pressable
                 style={[sheetStyles.cardOption, { backgroundColor: AppColors.redCard }, cardType === "red" && sheetStyles.cardOptionSelected]}
                 onPress={() => { Haptics.selectionAsync(); setCardType("red"); }}
               >
-                <ThemedText type="button" style={{ color: "#FFF" }}>Red</ThemedText>
+                <ThemedText type="body" style={{ color: "#FFF" }}>Red</ThemedText>
               </Pressable>
             </View>
             <Pressable style={sheetStyles.confirmButton} onPress={() => scorer && onCard(scorer, cardType)}>
-              <ThemedText type="button" style={sheetStyles.confirmButtonText}>Confirm</ThemedText>
+              <ThemedText type="body" style={sheetStyles.confirmButtonText}>Confirm</ThemedText>
             </Pressable>
           </View>
         );
@@ -892,7 +894,7 @@ function ActionSheet({
               onPress={() => playerOff && setStep(1)}
               disabled={!playerOff}
             >
-              <ThemedText type="button" style={sheetStyles.confirmButtonText}>Next</ThemedText>
+              <ThemedText type="body" style={sheetStyles.confirmButtonText}>Next</ThemedText>
             </Pressable>
           </ScrollView>
         );
@@ -912,7 +914,7 @@ function ActionSheet({
               onPress={() => playerOff && scorer && onSubstitution(playerOff, scorer)}
               disabled={!scorer}
             >
-              <ThemedText type="button" style={sheetStyles.confirmButtonText}>Confirm Sub</ThemedText>
+              <ThemedText type="body" style={sheetStyles.confirmButtonText}>Confirm Sub</ThemedText>
             </Pressable>
           </ScrollView>
         );
@@ -1029,7 +1031,7 @@ function TimelineSheet({ visible, events, players, onClose }: TimelineSheetProps
         <ThemedText type="h4" style={sheetStyles.title}>Match Timeline</ThemedText>
         <Pressable style={sheetStyles.filterToggle} onPress={() => setHideSubs(!hideSubs)}>
           <Feather name={hideSubs ? "check-square" : "square"} size={18} color={AppColors.textSecondary} />
-          <ThemedText type="caption" style={{ color: AppColors.textSecondary }}>Hide substitutions</ThemedText>
+          <ThemedText type="small" style={{ color: AppColors.textSecondary }}>Hide substitutions</ThemedText>
         </Pressable>
         {filteredEvents.length === 0 ? (
           <View style={sheetStyles.emptyTimeline}>
@@ -1042,7 +1044,7 @@ function TimelineSheet({ visible, events, players, onClose }: TimelineSheetProps
             keyExtractor={(item) => item.id}
             renderItem={({ item }) => (
               <View style={sheetStyles.timelineItem}>
-                <ThemedText type="caption" style={sheetStyles.timelineTime}>{formatMatchTime(item.timestamp)}</ThemedText>
+                <ThemedText type="small" style={sheetStyles.timelineTime}>{formatMatchTime(item.timestamp)}</ThemedText>
                 {getEventIcon(item)}
                 <ThemedText type="small" style={sheetStyles.timelineText}>{getEventText(item)}</ThemedText>
               </View>
