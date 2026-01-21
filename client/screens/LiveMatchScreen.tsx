@@ -300,11 +300,12 @@ export default function LiveMatchScreen() {
   );
 
   const handlePenalty = useCallback(
-    async (isFor: boolean, outcome?: "scored" | "missed") => {
+    async (isFor: boolean, outcome?: "scored" | "saved", scorerId?: string) => {
       await addEvent({
         type: "penalty",
         isForTeam: isFor,
         penaltyOutcome: outcome,
+        playerId: scorerId,
       });
       setShowActionSheet(false);
     },
@@ -703,7 +704,7 @@ interface ActionSheetProps {
   onGoalAgainst: (goalType: GoalType) => void;
   onCard: (player: Player, cardType: CardType) => void;
   onSubstitution: (playerOff: Player, playerOn: Player) => void;
-  onPenalty: (isFor: boolean, outcome?: "scored" | "missed") => void;
+  onPenalty: (isFor: boolean, outcome?: "scored" | "saved", scorerId?: string) => void;
 }
 
 function ActionSheet({
@@ -922,29 +923,45 @@ function ActionSheet({
     }
 
     if (action === "penalty") {
-      return (
-        <View style={sheetStyles.content}>
-          <ThemedText type="h4" style={sheetStyles.title}>Penalty</ThemedText>
-          <View style={sheetStyles.penaltyOptions}>
-            <Pressable style={sheetStyles.penaltyButton} onPress={() => onPenalty(true, "scored")}>
-              <Feather name="check-circle" size={24} color={AppColors.pitchGreen} />
-              <ThemedText type="body">For Us - Scored</ThemedText>
-            </Pressable>
-            <Pressable style={sheetStyles.penaltyButton} onPress={() => onPenalty(true, "missed")}>
-              <Feather name="x-circle" size={24} color={AppColors.redCard} />
-              <ThemedText type="body">For Us - Missed</ThemedText>
-            </Pressable>
-            <Pressable style={sheetStyles.penaltyButton} onPress={() => onPenalty(false, "scored")}>
-              <Feather name="check-circle" size={24} color={AppColors.redCard} />
-              <ThemedText type="body">Against Us - Scored</ThemedText>
-            </Pressable>
-            <Pressable style={sheetStyles.penaltyButton} onPress={() => onPenalty(false, "missed")}>
-              <Feather name="x-circle" size={24} color={AppColors.pitchGreen} />
-              <ThemedText type="body">Against Us - Missed</ThemedText>
-            </Pressable>
+      if (step === 0) {
+        return (
+          <View style={sheetStyles.content}>
+            <ThemedText type="h4" style={sheetStyles.title}>Penalty</ThemedText>
+            <View style={sheetStyles.penaltyOptions}>
+              <Pressable style={sheetStyles.penaltyButton} onPress={() => setStep(1)}>
+                <Feather name="check-circle" size={24} color={AppColors.pitchGreen} />
+                <ThemedText type="body">For Us - Scored</ThemedText>
+              </Pressable>
+              <Pressable style={sheetStyles.penaltyButton} onPress={() => onPenalty(true, "saved")}>
+                <Feather name="x-circle" size={24} color={AppColors.redCard} />
+                <ThemedText type="body">For Us - Saved</ThemedText>
+              </Pressable>
+              <Pressable style={sheetStyles.penaltyButton} onPress={() => onPenalty(false, "scored")}>
+                <Feather name="check-circle" size={24} color={AppColors.redCard} />
+                <ThemedText type="body">Against Us - Scored</ThemedText>
+              </Pressable>
+              <Pressable style={sheetStyles.penaltyButton} onPress={() => onPenalty(false, "saved")}>
+                <Feather name="x-circle" size={24} color={AppColors.pitchGreen} />
+                <ThemedText type="body">Against Us - Saved</ThemedText>
+              </Pressable>
+            </View>
           </View>
-        </View>
-      );
+        );
+      } else {
+        return (
+          <ScrollView style={sheetStyles.scrollContent} showsVerticalScrollIndicator={false}>
+            <ThemedText type="h4" style={sheetStyles.title}>Who scored the penalty?</ThemedText>
+            {renderPlayerGrid(players, scorer, setScorer)}
+            <Pressable
+              style={[sheetStyles.confirmButton, !scorer && sheetStyles.confirmButtonDisabled]}
+              onPress={() => scorer && onPenalty(true, "scored", scorer.id)}
+              disabled={!scorer}
+            >
+              <ThemedText type="body" style={sheetStyles.confirmButtonText}>Confirm</ThemedText>
+            </Pressable>
+          </ScrollView>
+        );
+      }
     }
 
     return null;

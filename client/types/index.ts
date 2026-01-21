@@ -25,7 +25,7 @@ export type MatchLocation = "home" | "away";
 
 export type GoalType = "open_play" | "corner" | "free_kick" | "penalty";
 export type CardType = "yellow" | "red";
-export type PenaltyOutcome = "scored" | "missed";
+export type PenaltyOutcome = "scored" | "saved";
 
 export interface MatchEvent {
   id: string;

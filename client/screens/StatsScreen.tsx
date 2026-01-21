@@ -10,14 +10,15 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 import { useFocusEffect } from "@react-navigation/native";
+import { Feather } from "@expo/vector-icons";
 import Svg, { Path, Circle, G, Text as SvgText } from "react-native-svg";
 
 import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
 import { Card } from "@/components/Card";
 import { Spacing, AppColors, BorderRadius } from "@/constants/theme";
-import { Match, MatchEvent, Team, Player } from "@/types";
-import { getMatches, getTeams } from "@/lib/storage";
+import { Match, MatchEvent, Team, Player, SubscriptionState } from "@/types";
+import { getMatches, getTeams, getSubscription } from "@/lib/storage";
 
 type FilterType = "all" | "home" | "away";
 
@@ -39,17 +40,20 @@ export default function StatsScreen() {
 
   const [matches, setMatches] = useState<Match[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
+  const [subscription, setSubscription] = useState<SubscriptionState | null>(null);
   const [filter, setFilter] = useState<FilterType>("all");
   const [loading, setLoading] = useState(true);
 
   const loadData = useCallback(async () => {
     try {
-      const [matchesData, teamsData] = await Promise.all([
+      const [matchesData, teamsData, subscriptionData] = await Promise.all([
         getMatches(),
         getTeams(),
+        getSubscription(),
       ]);
       setMatches(matchesData.filter(m => m.isCompleted));
       setTeams(teamsData);
+      setSubscription(subscriptionData);
     } catch (error) {
       console.error("Error loading stats:", error);
     } finally {
@@ -478,6 +482,47 @@ export default function StatsScreen() {
     );
   }
 
+  if (!subscription?.isPremium) {
+    return (
+      <ThemedView style={styles.container}>
+        <View style={[styles.lockedContainer, { paddingTop: headerHeight + Spacing.xl, paddingBottom: tabBarHeight + Spacing.xl }]}>
+          <View style={styles.lockedIcon}>
+            <Feather name="lock" size={48} color={AppColors.pitchGreen} />
+          </View>
+          <ThemedText type="h3" style={styles.lockedTitle}>
+            Premium Feature
+          </ThemedText>
+          <ThemedText type="body" style={styles.lockedText}>
+            Upgrade to Premium to unlock detailed match statistics, player performance insights, and more.
+          </ThemedText>
+          <View style={styles.lockedFeatures}>
+            <View style={styles.lockedFeatureItem}>
+              <Feather name="check" size={18} color={AppColors.pitchGreen} />
+              <ThemedText type="body" style={styles.lockedFeatureText}>Results breakdown</ThemedText>
+            </View>
+            <View style={styles.lockedFeatureItem}>
+              <Feather name="check" size={18} color={AppColors.pitchGreen} />
+              <ThemedText type="body" style={styles.lockedFeatureText}>Goal source analysis</ThemedText>
+            </View>
+            <View style={styles.lockedFeatureItem}>
+              <Feather name="check" size={18} color={AppColors.pitchGreen} />
+              <ThemedText type="body" style={styles.lockedFeatureText}>Top scorers and assists</ThemedText>
+            </View>
+            <View style={styles.lockedFeatureItem}>
+              <Feather name="check" size={18} color={AppColors.pitchGreen} />
+              <ThemedText type="body" style={styles.lockedFeatureText}>Minutes played tracking</ThemedText>
+            </View>
+          </View>
+          <Pressable style={styles.upgradeButton}>
+            <ThemedText type="body" style={styles.upgradeButtonText}>
+              Upgrade to Premium
+            </ThemedText>
+          </Pressable>
+        </View>
+      </ThemedView>
+    );
+  }
+
   return (
     <ThemedView style={styles.container}>
       <ScrollView
@@ -535,6 +580,53 @@ export default function StatsScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
+  lockedContainer: { 
+    flex: 1, 
+    justifyContent: "center", 
+    alignItems: "center", 
+    paddingHorizontal: Spacing.xl 
+  },
+  lockedIcon: { 
+    width: 100, 
+    height: 100, 
+    borderRadius: 50, 
+    backgroundColor: AppColors.surface, 
+    justifyContent: "center", 
+    alignItems: "center", 
+    marginBottom: Spacing.xl 
+  },
+  lockedTitle: { 
+    textAlign: "center", 
+    marginBottom: Spacing.md 
+  },
+  lockedText: { 
+    textAlign: "center", 
+    color: AppColors.textSecondary, 
+    marginBottom: Spacing.xl 
+  },
+  lockedFeatures: { 
+    marginBottom: Spacing.xl, 
+    width: "100%" 
+  },
+  lockedFeatureItem: { 
+    flexDirection: "row", 
+    alignItems: "center", 
+    marginBottom: Spacing.sm, 
+    gap: Spacing.sm 
+  },
+  lockedFeatureText: { 
+    color: AppColors.textSecondary 
+  },
+  upgradeButton: { 
+    backgroundColor: AppColors.pitchGreen, 
+    paddingVertical: Spacing.md, 
+    paddingHorizontal: Spacing.xl, 
+    borderRadius: BorderRadius.md 
+  },
+  upgradeButtonText: { 
+    color: "#FFFFFF", 
+    fontWeight: "700" 
+  },
   scrollContent: { paddingHorizontal: Spacing.lg },
   screenTitle: { marginBottom: Spacing.md },
   filterRow: { flexDirection: "row", gap: Spacing.sm, marginBottom: Spacing.md },
