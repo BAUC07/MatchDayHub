@@ -42,6 +42,7 @@ export default function StatsScreen() {
   const [teams, setTeams] = useState<Team[]>([]);
   const [subscription, setSubscription] = useState<SubscriptionState | null>(null);
   const [filter, setFilter] = useState<FilterType>("all");
+  const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   const loadData = useCallback(async () => {
@@ -54,12 +55,15 @@ export default function StatsScreen() {
       setMatches(matchesData.filter(m => m.isCompleted));
       setTeams(teamsData);
       setSubscription(subscriptionData);
+      if (teamsData.length > 0 && !selectedTeamId) {
+        setSelectedTeamId(teamsData[0].id);
+      }
     } catch (error) {
       console.error("Error loading stats:", error);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [selectedTeamId]);
 
   useFocusEffect(
     useCallback(() => {
@@ -67,7 +71,10 @@ export default function StatsScreen() {
     }, [loadData])
   );
 
+  const selectedTeam = teams.find((t) => t.id === selectedTeamId) || null;
+  
   const filteredMatches = matches.filter((m) => {
+    if (selectedTeamId && m.teamId !== selectedTeamId) return false;
     if (filter === "all") return true;
     return m.location === filter;
   });
@@ -539,6 +546,38 @@ export default function StatsScreen() {
           Statistics
         </ThemedText>
 
+        {teams.length > 1 ? (
+          <View style={styles.teamSelectorContainer}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.teamSelectorScroll}
+            >
+              {teams.map((team) => (
+                <Pressable
+                  key={team.id}
+                  style={[
+                    styles.teamSelectorButton,
+                    selectedTeamId === team.id && styles.teamSelectorButtonActive,
+                  ]}
+                  onPress={() => setSelectedTeamId(team.id)}
+                >
+                  <ThemedText
+                    type="small"
+                    style={[
+                      styles.teamSelectorText,
+                      selectedTeamId === team.id && styles.teamSelectorTextActive,
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {team.name}
+                  </ThemedText>
+                </Pressable>
+              ))}
+            </ScrollView>
+          </View>
+        ) : null}
+
         {renderFilterButtons()}
 
         <ThemedText type="small" style={styles.matchCount}>
@@ -629,6 +668,22 @@ const styles = StyleSheet.create({
   },
   scrollContent: { paddingHorizontal: Spacing.lg },
   screenTitle: { marginBottom: Spacing.md },
+  teamSelectorContainer: { marginBottom: Spacing.md },
+  teamSelectorScroll: { gap: Spacing.sm },
+  teamSelectorButton: {
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    borderRadius: BorderRadius.sm,
+    backgroundColor: AppColors.surface,
+    borderWidth: 1,
+    borderColor: AppColors.elevated,
+  },
+  teamSelectorButtonActive: {
+    backgroundColor: AppColors.pitchGreen,
+    borderColor: AppColors.pitchGreen,
+  },
+  teamSelectorText: { color: AppColors.textSecondary },
+  teamSelectorTextActive: { color: "#FFFFFF", fontWeight: "600" },
   filterRow: { flexDirection: "row", gap: Spacing.sm, marginBottom: Spacing.md },
   filterButton: {
     paddingVertical: Spacing.xs,
