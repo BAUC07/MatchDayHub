@@ -21,7 +21,7 @@ export default function SettingsScreen() {
   const { theme } = useTheme();
 
   const [subscription, setSubscription] = useState<SubscriptionState>({
-    isPremium: false,
+    isElite: false,
     maxTeams: 1,
   });
   const [loading, setLoading] = useState(true);
@@ -45,14 +45,14 @@ export default function SettingsScreen() {
 
   const handleUpgrade = useCallback(async () => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    const newSub = { isPremium: true, maxTeams: 999 };
+    const newSub = { isElite: true, maxTeams: 999 };
     await saveSubscription(newSub);
     setSubscription(newSub);
   }, []);
 
   const handleDowngrade = useCallback(async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    const newSub = { isPremium: false, maxTeams: 1 };
+    const newSub = { isElite: false, maxTeams: 1 };
     await saveSubscription(newSub);
     setSubscription(newSub);
   }, []);
@@ -79,7 +79,7 @@ export default function SettingsScreen() {
           <View style={styles.profileInfo}>
             <ThemedText type="h4">Manager</ThemedText>
             <ThemedText type="small" style={{ color: AppColors.textSecondary }}>
-              {subscription.isPremium ? "Premium Member" : "Free Plan"}
+              {subscription.isElite ? "Elite Member" : "Free Plan"}
             </ThemedText>
           </View>
         </View>
@@ -93,24 +93,24 @@ export default function SettingsScreen() {
         <View style={styles.subscriptionHeader}>
           <View style={styles.planInfo}>
             <Feather
-              name={subscription.isPremium ? "star" : "zap"}
+              name={subscription.isElite ? "star" : "zap"}
               size={24}
-              color={subscription.isPremium ? AppColors.warningYellow : AppColors.pitchGreen}
+              color={subscription.isElite ? AppColors.warningYellow : AppColors.pitchGreen}
             />
             <View style={styles.planText}>
               <ThemedText type="h4">
-                {subscription.isPremium ? "Premium" : "Free Plan"}
+                {subscription.isElite ? "Elite" : "Free Plan"}
               </ThemedText>
               <ThemedText type="small" style={{ color: AppColors.textSecondary }}>
-                {subscription.isPremium
-                  ? "Unlimited teams"
+                {subscription.isElite
+                  ? "Unlimited teams and stats"
                   : "1 team maximum"}
               </ThemedText>
             </View>
           </View>
         </View>
 
-        {subscription.isPremium ? (
+        {subscription.isElite ? (
           <Pressable
             style={({ pressed }) => [
               styles.manageButton,
@@ -135,7 +135,7 @@ export default function SettingsScreen() {
               </View>
               <View style={styles.featureItem}>
                 <Feather name="check" size={16} color={AppColors.pitchGreen} />
-                <ThemedText type="small">Player statistics</ThemedText>
+                <ThemedText type="small">Team statistics and PDF export</ThemedText>
               </View>
             </View>
 
@@ -147,7 +147,7 @@ export default function SettingsScreen() {
               onPress={handleUpgrade}
             >
               <ThemedText type="button" style={styles.upgradeButtonText}>
-                Upgrade to Premium
+                Upgrade to Elite
               </ThemedText>
             </Pressable>
           </View>

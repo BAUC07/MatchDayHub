@@ -9,7 +9,7 @@ const STORAGE_KEYS = {
 };
 
 const DEFAULT_SUBSCRIPTION: SubscriptionState = {
-  isPremium: false,
+  isElite: false,
   maxTeams: 1,
 };
 

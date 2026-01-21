@@ -64,7 +64,7 @@ export interface Match {
 }
 
 export interface SubscriptionState {
-  isPremium: boolean;
+  isElite: boolean;
   maxTeams: number;
 }
 

@@ -482,7 +482,7 @@ export default function StatsScreen() {
     );
   }
 
-  if (!subscription?.isPremium) {
+  if (!subscription?.isElite) {
     return (
       <ThemedView style={styles.container}>
         <View style={[styles.lockedContainer, { paddingTop: headerHeight + Spacing.xl, paddingBottom: tabBarHeight + Spacing.xl }]}>
@@ -490,10 +490,10 @@ export default function StatsScreen() {
             <Feather name="lock" size={48} color={AppColors.pitchGreen} />
           </View>
           <ThemedText type="h3" style={styles.lockedTitle}>
-            Premium Feature
+            Elite Feature
           </ThemedText>
           <ThemedText type="body" style={styles.lockedText}>
-            Upgrade to Premium to unlock detailed match statistics, player performance insights, and more.
+            Upgrade to Elite to unlock detailed match statistics and performance insights.
           </ThemedText>
           <View style={styles.lockedFeatures}>
             <View style={styles.lockedFeatureItem}>
@@ -515,7 +515,7 @@ export default function StatsScreen() {
           </View>
           <Pressable style={styles.upgradeButton}>
             <ThemedText type="body" style={styles.upgradeButtonText}>
-              Upgrade to Premium
+              Upgrade to Elite
             </ThemedText>
           </Pressable>
         </View>

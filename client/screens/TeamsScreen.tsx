@@ -35,7 +35,7 @@ export default function TeamsScreen() {
 
   const [teams, setTeams] = useState<Team[]>([]);
   const [subscription, setSubscription] = useState<SubscriptionState>({
-    isPremium: false,
+    isElite: false,
     maxTeams: 1,
   });
   const [loading, setLoading] = useState(true);
@@ -68,7 +68,7 @@ export default function TeamsScreen() {
     loadData();
   }, [loadData]);
 
-  const canAddTeam = subscription.isPremium || teams.length < subscription.maxTeams;
+  const canAddTeam = subscription.isElite || teams.length < subscription.maxTeams;
 
   const handleAddTeam = useCallback(() => {
     if (canAddTeam) {
