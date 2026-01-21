@@ -60,15 +60,18 @@ export default function StatsScreen() {
       setMatches(matchesData.filter(m => m.isCompleted));
       setTeams(teamsData);
       setSubscription(subscriptionData);
-      if (teamsData.length > 0 && !selectedTeamId) {
-        setSelectedTeamId(teamsData[0].id);
-      }
+      setSelectedTeamId((prev) => {
+        if (prev === null && teamsData.length > 0) {
+          return teamsData[0].id;
+        }
+        return prev;
+      });
     } catch (error) {
       console.error("Error loading stats:", error);
     } finally {
       setLoading(false);
     }
-  }, [selectedTeamId]);
+  }, []);
 
   useFocusEffect(
     useCallback(() => {

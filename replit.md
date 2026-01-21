@@ -10,7 +10,7 @@ MVP complete with core functionality:
 - Live match event logging (goals, cards, penalties, substitutions)
 - Match summary with timeline visualization
 - Local data persistence using AsyncStorage
-- Subscription logic (1 team free, unlimited for premium)
+- Subscription logic (1 team free, unlimited for Elite)
 
 ## Architecture
 
@@ -43,12 +43,14 @@ MVP complete with core functionality:
 
 ### Squad Editor
 - Simple form to add players (name + optional squad number)
+- Tap on any player to edit their name or number inline
 - NO player state selection here - that happens in Match Setup
 - Players can be removed
 
 ### Match Setup
 - Opposition name, location (home/away), format (5v5 to 11v11)
 - **Lineup Selection**: Tap players to add to starting lineup
+- Add new players directly from match setup (useful for late arrivals)
 - Auto-assigns remaining players as substitutes
 
 ### Live Match (Critical - No Scroll)
@@ -67,6 +69,7 @@ MVP complete with core functionality:
 - Timeline filter to hide substitution events
 
 ### Stats Tab
+- Team selector when multiple teams exist
 - Filter by All/Home/Away matches
 - Results pie chart (wins, draws, losses)
 - Goal Sources pie chart (open play, corner, free kick, penalty)
@@ -74,6 +77,7 @@ MVP complete with core functionality:
 - Top Assists table with assist counts
 - Cards Received table (yellow and red card breakdown)
 - Minutes Played table with match appearances
+- PDF export button to generate and share season statistics
 
 ### Match Summary
 - Final score with result badge
@@ -153,8 +157,13 @@ server/
 - Haptic feedback on all interactions
 
 ## Recent Changes
+- Rebranded subscription tier from "Premium" to "Elite" throughout app
+- Added PDF export for team statistics (generates professional PDF with results, goals, scorers)
+- Team selector on Stats tab when multiple teams exist
+- Player name/number editing in Squad Editor (tap to edit inline)
+- Add players directly from Match Setup screen (for late arrivals)
 - Draggable player positions on the pitch during live matches (tap to log event, drag to reposition)
-- Stats tab now locked behind premium subscription with upgrade prompt UI
+- Stats tab now locked behind Elite subscription with upgrade prompt UI
 - Penalty terminology changed from "missed" to "saved"
 - Penalty scorer selection when team scores a penalty
 - Re-substitution enabled: players who were subbed off can be brought back on
