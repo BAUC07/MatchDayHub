@@ -42,6 +42,9 @@ export default function SquadEditorScreen() {
   const [newPlayerNumber, setNewPlayerNumber] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [editingPlayerId, setEditingPlayerId] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState("");
+  const [editingNumber, setEditingNumber] = useState("");
 
   const loadTeam = useCallback(async () => {
     try {
@@ -150,29 +153,124 @@ export default function SquadEditorScreen() {
     ]);
   }, []);
 
+  const handleStartEdit = useCallback((player: Player) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setEditingPlayerId(player.id);
+    setEditingName(player.name);
+    setEditingNumber(player.squadNumber?.toString() || "");
+  }, []);
+
+  const handleSaveEdit = useCallback(() => {
+    if (!editingPlayerId || !editingName.trim()) return;
+
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    
+    const number = editingNumber.trim()
+      ? parseInt(editingNumber.trim(), 10)
+      : undefined;
+
+    setPlayers((prev) =>
+      prev.map((p) =>
+        p.id === editingPlayerId
+          ? { ...p, name: editingName.trim(), squadNumber: number }
+          : p
+      )
+    );
+    setEditingPlayerId(null);
+    setEditingName("");
+    setEditingNumber("");
+  }, [editingPlayerId, editingName, editingNumber]);
+
+  const handleCancelEdit = useCallback(() => {
+    setEditingPlayerId(null);
+    setEditingName("");
+    setEditingNumber("");
+  }, []);
+
   const renderPlayerItem = useCallback(
-    ({ item }: { item: Player }) => (
-      <View style={styles.playerCard}>
-        <View style={styles.playerInfo}>
-          <View style={styles.playerNumber}>
-            <ThemedText type="body" style={styles.numberText}>
-              {item.squadNumber ?? "-"}
+    ({ item }: { item: Player }) => {
+      const isEditing = editingPlayerId === item.id;
+
+      if (isEditing) {
+        return (
+          <View style={styles.playerCardEditing}>
+            <View style={styles.editInputsRow}>
+              <TextInput
+                style={[styles.editNumberInput, { color: theme.text }]}
+                value={editingNumber}
+                onChangeText={setEditingNumber}
+                placeholder="#"
+                placeholderTextColor={AppColors.textDisabled}
+                keyboardType="number-pad"
+                maxLength={2}
+              />
+              <TextInput
+                style={[styles.editNameInput, { color: theme.text }]}
+                value={editingName}
+                onChangeText={setEditingName}
+                placeholder="Player name"
+                placeholderTextColor={AppColors.textDisabled}
+                autoFocus
+              />
+            </View>
+            <View style={styles.editActionsRow}>
+              <Pressable
+                style={styles.cancelEditButton}
+                onPress={handleCancelEdit}
+              >
+                <ThemedText type="small" style={{ color: AppColors.textSecondary }}>
+                  Cancel
+                </ThemedText>
+              </Pressable>
+              <Pressable
+                style={[
+                  styles.saveEditButton,
+                  !editingName.trim() && styles.saveEditButtonDisabled,
+                ]}
+                onPress={handleSaveEdit}
+                disabled={!editingName.trim()}
+              >
+                <ThemedText type="small" style={{ color: "#FFFFFF", fontWeight: "600" }}>
+                  Save
+                </ThemedText>
+              </Pressable>
+            </View>
+          </View>
+        );
+      }
+
+      return (
+        <Pressable
+          style={({ pressed }) => [
+            styles.playerCard,
+            { opacity: pressed ? 0.8 : 1 },
+          ]}
+          onPress={() => handleStartEdit(item)}
+        >
+          <View style={styles.playerInfo}>
+            <View style={styles.playerNumber}>
+              <ThemedText type="body" style={styles.numberText}>
+                {item.squadNumber ?? "-"}
+              </ThemedText>
+            </View>
+            <ThemedText type="body" numberOfLines={1} style={styles.playerName}>
+              {item.name}
             </ThemedText>
           </View>
-          <ThemedText type="body" numberOfLines={1} style={styles.playerName}>
-            {item.name}
-          </ThemedText>
-        </View>
-        <Pressable
-          onPress={() => handleRemovePlayer(item.id)}
-          hitSlop={8}
-          style={({ pressed }) => [{ opacity: pressed ? 0.6 : 1 }]}
-        >
-          <Feather name="x" size={20} color={AppColors.redCard} />
+          <View style={styles.playerActions}>
+            <Feather name="edit-2" size={16} color={AppColors.textSecondary} />
+            <Pressable
+              onPress={() => handleRemovePlayer(item.id)}
+              hitSlop={8}
+              style={({ pressed }) => [{ opacity: pressed ? 0.6 : 1 }]}
+            >
+              <Feather name="x" size={20} color={AppColors.redCard} />
+            </Pressable>
+          </View>
         </Pressable>
-      </View>
-    ),
-    [handleRemovePlayer]
+      );
+    },
+    [handleRemovePlayer, handleStartEdit, handleSaveEdit, handleCancelEdit, editingPlayerId, editingName, editingNumber, theme.text]
   );
 
   if (loading) {
@@ -388,10 +486,62 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.md,
     padding: Spacing.md,
   },
+  playerCardEditing: {
+    backgroundColor: AppColors.elevated,
+    borderRadius: BorderRadius.md,
+    padding: Spacing.md,
+    borderWidth: 2,
+    borderColor: AppColors.pitchGreen,
+  },
+  editInputsRow: {
+    flexDirection: "row",
+    gap: Spacing.sm,
+    marginBottom: Spacing.sm,
+  },
+  editNumberInput: {
+    width: 50,
+    height: 40,
+    backgroundColor: AppColors.surface,
+    borderRadius: BorderRadius.xs,
+    paddingHorizontal: Spacing.sm,
+    fontSize: 16,
+    textAlign: "center",
+  },
+  editNameInput: {
+    flex: 1,
+    height: 40,
+    backgroundColor: AppColors.surface,
+    borderRadius: BorderRadius.xs,
+    paddingHorizontal: Spacing.md,
+    fontSize: 16,
+  },
+  editActionsRow: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    gap: Spacing.sm,
+  },
+  cancelEditButton: {
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+  },
+  saveEditButton: {
+    backgroundColor: AppColors.pitchGreen,
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.lg,
+    borderRadius: BorderRadius.xs,
+  },
+  saveEditButtonDisabled: {
+    backgroundColor: AppColors.textDisabled,
+  },
   playerInfo: {
     flexDirection: "row",
     alignItems: "center",
     flex: 1,
+  },
+  playerActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.md,
   },
   playerNumber: {
     width: 36,
