@@ -153,6 +153,11 @@ server/
 - Haptic feedback on all interactions
 
 ## Recent Changes
+- Draggable player positions on the pitch during live matches (tap to log event, drag to reposition)
+- Stats tab now locked behind premium subscription with upgrade prompt UI
+- Penalty terminology changed from "missed" to "saved"
+- Penalty scorer selection when team scores a penalty
+- Re-substitution enabled: players who were subbed off can be brought back on
 - Compact match history layout showing more games per screen
 - Club logo upload feature for teams (in creation and squad editor)
 - Added Stats tab with pie charts and player statistics tables
