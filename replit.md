@@ -153,6 +153,8 @@ server/
 - Haptic feedback on all interactions
 
 ## Recent Changes
+- Compact match history layout showing more games per screen
+- Club logo upload feature for teams (in creation and squad editor)
 - Added Stats tab with pie charts and player statistics tables
 - Redesigned timer with half-time logic and added time tracking
 - Half-time button (HT) that becomes END button in second half

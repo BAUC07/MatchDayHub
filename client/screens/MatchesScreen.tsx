@@ -164,30 +164,27 @@ export default function MatchesScreen() {
       const resultColor = getResultColor(result);
 
       return (
-        <Card
-          elevation={2}
+        <Pressable
+          style={({ pressed }) => [
+            styles.matchCard,
+            { opacity: pressed ? 0.8 : 1 },
+          ]}
           onPress={() => handleMatchPress(item)}
-          style={styles.matchCard}
         >
-          <View style={styles.matchHeader}>
-            <ThemedText type="small" style={{ color: AppColors.textSecondary }}>
-              {formatDate(item.date)}
+          <View
+            style={[
+              styles.locationBadge,
+              {
+                backgroundColor:
+                  item.location === "home"
+                    ? AppColors.pitchGreen
+                    : AppColors.elevated,
+              },
+            ]}
+          >
+            <ThemedText type="h4" style={{ color: "#FFFFFF", fontWeight: "700" }}>
+              {item.location === "home" ? "H" : "A"}
             </ThemedText>
-            <View
-              style={[
-                styles.locationBadge,
-                {
-                  backgroundColor:
-                    item.location === "home"
-                      ? AppColors.pitchGreen
-                      : AppColors.elevated,
-                },
-              ]}
-            >
-              <ThemedText type="caption" style={{ color: "#FFFFFF" }}>
-                {item.location === "home" ? "H" : "A"}
-              </ThemedText>
-            </View>
           </View>
 
           <View style={styles.scoreContainer}>
@@ -195,37 +192,34 @@ export default function MatchesScreen() {
               <ThemedText type="body" numberOfLines={1} style={styles.teamName}>
                 {getTeamName(item.teamId)}
               </ThemedText>
-              <ThemedText type="h2" style={[styles.score, { color: resultColor }]}>
+              <ThemedText type="h3" style={[styles.score, { color: resultColor }]}>
                 {item.scoreFor}
               </ThemedText>
             </View>
-            <ThemedText type="h4" style={styles.vs}>
+            <ThemedText type="body" style={styles.vs}>
               -
             </ThemedText>
             <View style={[styles.teamScore, styles.teamScoreRight]}>
               <ThemedText type="body" numberOfLines={1} style={styles.teamName}>
                 {item.opposition}
               </ThemedText>
-              <ThemedText type="h2" style={styles.score}>
+              <ThemedText type="h3" style={styles.score}>
                 {item.scoreAgainst}
               </ThemedText>
             </View>
           </View>
 
-          <View style={styles.matchFooter}>
-            <ThemedText type="caption" style={{ color: AppColors.textSecondary }}>
+          <View style={styles.matchMeta}>
+            <ThemedText type="body" style={{ color: AppColors.textSecondary }}>
               {item.format}
             </ThemedText>
             {!item.isCompleted ? (
               <View style={styles.liveBadge}>
                 <View style={styles.liveIndicator} />
-                <ThemedText type="caption" style={{ color: AppColors.redCard }}>
-                  LIVE
-                </ThemedText>
               </View>
             ) : null}
           </View>
-        </Card>
+        </Pressable>
       );
     },
     [getTeamName, handleMatchPress]
@@ -331,7 +325,7 @@ export default function MatchesScreen() {
                 </View>
                 <View style={styles.teamOptionInfo}>
                   <ThemedText type="body">{item.name}</ThemedText>
-                  <ThemedText type="caption" style={{ color: AppColors.textSecondary }}>
+                  <ThemedText type="small" style={{ color: AppColors.textSecondary }}>
                     {item.players.length} players
                   </ThemedText>
                 </View>
@@ -385,50 +379,50 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   matchCard: {
-    padding: Spacing.lg,
-  },
-  matchHeader: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: Spacing.md,
+    backgroundColor: AppColors.surface,
+    borderRadius: BorderRadius.md,
+    paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.md,
   },
   locationBadge: {
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 2,
-    borderRadius: BorderRadius.xs,
+    width: 44,
+    height: 44,
+    borderRadius: BorderRadius.sm,
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: Spacing.md,
   },
   scoreContainer: {
+    flex: 1,
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: Spacing.md,
   },
   teamScore: {
     flex: 1,
+    alignItems: "center",
   },
   teamScoreRight: {
-    alignItems: "flex-end",
+    alignItems: "center",
   },
   teamName: {
-    marginBottom: 4,
+    fontSize: 14,
+    marginBottom: 2,
   },
   score: {
     fontWeight: "700",
   },
   vs: {
     color: AppColors.textSecondary,
-    marginHorizontal: Spacing.lg,
+    marginHorizontal: Spacing.sm,
   },
-  matchFooter: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
+  matchMeta: {
+    alignItems: "flex-end",
+    marginLeft: Spacing.md,
   },
   liveBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
+    marginTop: 4,
   },
   liveIndicator: {
     width: 8,
@@ -437,7 +431,7 @@ const styles = StyleSheet.create({
     backgroundColor: AppColors.redCard,
   },
   separator: {
-    height: Spacing.md,
+    height: Spacing.sm,
   },
   emptyContainer: {
     alignItems: "center",
