@@ -1,0 +1,572 @@
+import React, { useState, useCallback } from "react";
+import {
+  View,
+  ScrollView,
+  StyleSheet,
+  Pressable,
+  Dimensions,
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useHeaderHeight } from "@react-navigation/elements";
+import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
+import { useFocusEffect } from "@react-navigation/native";
+import Svg, { Path, Circle, G, Text as SvgText } from "react-native-svg";
+
+import { ThemedText } from "@/components/ThemedText";
+import { ThemedView } from "@/components/ThemedView";
+import { Card } from "@/components/Card";
+import { Spacing, AppColors, BorderRadius } from "@/constants/theme";
+import { Match, MatchEvent, Team, Player } from "@/types";
+import { getMatches, getTeams } from "@/lib/storage";
+
+type FilterType = "all" | "home" | "away";
+
+interface PlayerStat {
+  playerId: string;
+  playerName: string;
+  squadNumber?: number;
+  count: number;
+}
+
+interface MinutesStat extends PlayerStat {
+  matches: number;
+}
+
+export default function StatsScreen() {
+  const insets = useSafeAreaInsets();
+  const headerHeight = useHeaderHeight();
+  const tabBarHeight = useBottomTabBarHeight();
+
+  const [matches, setMatches] = useState<Match[]>([]);
+  const [teams, setTeams] = useState<Team[]>([]);
+  const [filter, setFilter] = useState<FilterType>("all");
+  const [loading, setLoading] = useState(true);
+
+  const loadData = useCallback(async () => {
+    try {
+      const [matchesData, teamsData] = await Promise.all([
+        getMatches(),
+        getTeams(),
+      ]);
+      setMatches(matchesData.filter(m => m.isCompleted));
+      setTeams(teamsData);
+    } catch (error) {
+      console.error("Error loading stats:", error);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [loadData])
+  );
+
+  const filteredMatches = matches.filter((m) => {
+    if (filter === "all") return true;
+    return m.location === filter;
+  });
+
+  const getPlayerName = (playerId: string): string => {
+    for (const team of teams) {
+      const player = team.players.find((p) => p.id === playerId);
+      if (player) return player.name;
+    }
+    return "Unknown";
+  };
+
+  const getPlayerSquadNumber = (playerId: string): number | undefined => {
+    for (const team of teams) {
+      const player = team.players.find((p) => p.id === playerId);
+      if (player) return player.squadNumber;
+    }
+    return undefined;
+  };
+
+  const resultsData = {
+    wins: filteredMatches.filter((m) => m.scoreFor > m.scoreAgainst).length,
+    draws: filteredMatches.filter((m) => m.scoreFor === m.scoreAgainst).length,
+    losses: filteredMatches.filter((m) => m.scoreFor < m.scoreAgainst).length,
+  };
+
+  const goalsData = (() => {
+    let openPlay = 0;
+    let corner = 0;
+    let freeKick = 0;
+    let penalty = 0;
+    
+    filteredMatches.forEach((match) => {
+      match.events.forEach((event) => {
+        if (event.type === "goal_for") {
+          switch (event.goalType) {
+            case "open_play": openPlay++; break;
+            case "corner": corner++; break;
+            case "free_kick": freeKick++; break;
+            case "penalty": penalty++; break;
+            default: openPlay++; break;
+          }
+        }
+      });
+    });
+    
+    return { openPlay, corner, freeKick, penalty };
+  })();
+
+  const topScorers: PlayerStat[] = (() => {
+    const scorerMap = new Map<string, number>();
+    
+    filteredMatches.forEach((match) => {
+      match.events.forEach((event) => {
+        if (event.type === "goal_for" && event.playerId) {
+          scorerMap.set(event.playerId, (scorerMap.get(event.playerId) || 0) + 1);
+        }
+      });
+    });
+
+    return Array.from(scorerMap.entries())
+      .map(([playerId, count]) => ({
+        playerId,
+        playerName: getPlayerName(playerId),
+        squadNumber: getPlayerSquadNumber(playerId),
+        count,
+      }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 10);
+  })();
+
+  const topAssists: PlayerStat[] = (() => {
+    const assistMap = new Map<string, number>();
+    
+    filteredMatches.forEach((match) => {
+      match.events.forEach((event) => {
+        if (event.type === "goal_for" && event.assistPlayerId) {
+          assistMap.set(event.assistPlayerId, (assistMap.get(event.assistPlayerId) || 0) + 1);
+        }
+      });
+    });
+
+    return Array.from(assistMap.entries())
+      .map(([playerId, count]) => ({
+        playerId,
+        playerName: getPlayerName(playerId),
+        squadNumber: getPlayerSquadNumber(playerId),
+        count,
+      }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 10);
+  })();
+
+  const cardsReceived: PlayerStat[] = (() => {
+    const cardMap = new Map<string, { yellow: number; red: number }>();
+    
+    filteredMatches.forEach((match) => {
+      match.events.forEach((event) => {
+        if (event.type === "card" && event.playerId && event.isForTeam) {
+          const current = cardMap.get(event.playerId) || { yellow: 0, red: 0 };
+          if (event.cardType === "yellow") current.yellow++;
+          if (event.cardType === "red") current.red++;
+          cardMap.set(event.playerId, current);
+        }
+      });
+    });
+
+    return Array.from(cardMap.entries())
+      .map(([playerId, cards]) => ({
+        playerId,
+        playerName: getPlayerName(playerId),
+        squadNumber: getPlayerSquadNumber(playerId),
+        count: cards.yellow + cards.red * 2,
+        yellowCards: cards.yellow,
+        redCards: cards.red,
+      }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 10);
+  })();
+
+  const playerMinutes: MinutesStat[] = (() => {
+    const minutesMap = new Map<string, { minutes: number; matches: number }>();
+    
+    filteredMatches.forEach((match) => {
+      const matchDuration = match.totalMatchTime / 60;
+      const playerTimes = new Map<string, { start: number; end: number }>();
+      
+      match.startingLineup.forEach((playerId) => {
+        playerTimes.set(playerId, { start: 0, end: matchDuration });
+      });
+      
+      match.events
+        .filter((e) => e.type === "substitution")
+        .sort((a, b) => a.timestamp - b.timestamp)
+        .forEach((event) => {
+          const subTime = event.timestamp / 60;
+          if (event.playerOffId) {
+            const existing = playerTimes.get(event.playerOffId);
+            if (existing) {
+              existing.end = subTime;
+            }
+          }
+          if (event.playerOnId) {
+            playerTimes.set(event.playerOnId, { start: subTime, end: matchDuration });
+          }
+        });
+      
+      playerTimes.forEach(({ start, end }, playerId) => {
+        const played = Math.max(0, end - start);
+        const current = minutesMap.get(playerId) || { minutes: 0, matches: 0 };
+        current.minutes += played;
+        current.matches += 1;
+        minutesMap.set(playerId, current);
+      });
+    });
+
+    return Array.from(minutesMap.entries())
+      .map(([playerId, data]) => ({
+        playerId,
+        playerName: getPlayerName(playerId),
+        squadNumber: getPlayerSquadNumber(playerId),
+        count: Math.round(data.minutes),
+        matches: data.matches,
+      }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 10);
+  })();
+
+  const renderPieChart = (
+    data: { value: number; color: string; label: string }[],
+    size: number = 120
+  ) => {
+    const total = data.reduce((sum, d) => sum + d.value, 0);
+    if (total === 0) {
+      return (
+        <View style={[styles.pieChart, { width: size, height: size }]}>
+          <Svg width={size} height={size}>
+            <Circle
+              cx={size / 2}
+              cy={size / 2}
+              r={size / 2 - 5}
+              fill={AppColors.elevated}
+            />
+          </Svg>
+          <View style={styles.pieChartCenter}>
+            <ThemedText type="caption" style={{ color: AppColors.textSecondary }}>
+              No data
+            </ThemedText>
+          </View>
+        </View>
+      );
+    }
+
+    const radius = size / 2 - 5;
+    const centerX = size / 2;
+    const centerY = size / 2;
+    let currentAngle = -90;
+
+    const paths = data.map((segment, index) => {
+      if (segment.value === 0) return null;
+      
+      const percentage = segment.value / total;
+      const angle = percentage * 360;
+      const startAngle = currentAngle;
+      const endAngle = currentAngle + angle;
+      currentAngle = endAngle;
+
+      const startRad = (startAngle * Math.PI) / 180;
+      const endRad = (endAngle * Math.PI) / 180;
+
+      const x1 = centerX + radius * Math.cos(startRad);
+      const y1 = centerY + radius * Math.sin(startRad);
+      const x2 = centerX + radius * Math.cos(endRad);
+      const y2 = centerY + radius * Math.sin(endRad);
+
+      const largeArcFlag = angle > 180 ? 1 : 0;
+
+      const pathData = `M ${centerX} ${centerY} L ${x1} ${y1} A ${radius} ${radius} 0 ${largeArcFlag} 1 ${x2} ${y2} Z`;
+
+      return (
+        <Path key={index} d={pathData} fill={segment.color} />
+      );
+    });
+
+    return (
+      <View style={styles.pieChartContainer}>
+        <Svg width={size} height={size}>
+          <G>{paths}</G>
+        </Svg>
+        <View style={styles.pieLegend}>
+          {data.map((segment, index) => (
+            <View key={index} style={styles.legendItem}>
+              <View style={[styles.legendDot, { backgroundColor: segment.color }]} />
+              <ThemedText type="caption" style={styles.legendText}>
+                {segment.label}: {segment.value}
+              </ThemedText>
+            </View>
+          ))}
+        </View>
+      </View>
+    );
+  };
+
+  const renderFilterButtons = () => (
+    <View style={styles.filterRow}>
+      {(["all", "home", "away"] as FilterType[]).map((f) => (
+        <Pressable
+          key={f}
+          style={[
+            styles.filterButton,
+            filter === f && styles.filterButtonActive,
+          ]}
+          onPress={() => setFilter(f)}
+        >
+          <ThemedText
+            type="caption"
+            style={[
+              styles.filterButtonText,
+              filter === f && styles.filterButtonTextActive,
+            ]}
+          >
+            {f.charAt(0).toUpperCase() + f.slice(1)}
+          </ThemedText>
+        </Pressable>
+      ))}
+    </View>
+  );
+
+  const renderTable = (
+    title: string,
+    data: PlayerStat[],
+    valueLabel: string = "Count"
+  ) => (
+    <Card elevation={1} style={styles.tableCard}>
+      <ThemedText type="subtitle" style={styles.tableTitle}>
+        {title}
+      </ThemedText>
+      {data.length === 0 ? (
+        <ThemedText type="caption" style={styles.noDataText}>
+          No data available
+        </ThemedText>
+      ) : (
+        <View style={styles.table}>
+          <View style={styles.tableHeader}>
+            <ThemedText type="caption" style={[styles.tableHeaderCell, styles.rankCell]}>
+              #
+            </ThemedText>
+            <ThemedText type="caption" style={[styles.tableHeaderCell, styles.playerCell]}>
+              Player
+            </ThemedText>
+            <ThemedText type="caption" style={[styles.tableHeaderCell, styles.valueCell]}>
+              {valueLabel}
+            </ThemedText>
+          </View>
+          {data.map((item, index) => (
+            <View key={item.playerId} style={styles.tableRow}>
+              <ThemedText type="body" style={[styles.tableCell, styles.rankCell]}>
+                {index + 1}
+              </ThemedText>
+              <ThemedText type="body" style={[styles.tableCell, styles.playerCell]} numberOfLines={1}>
+                {item.squadNumber ? `${item.squadNumber}. ` : ""}{item.playerName}
+              </ThemedText>
+              <ThemedText type="body" style={[styles.tableCell, styles.valueCell]}>
+                {item.count}
+              </ThemedText>
+            </View>
+          ))}
+        </View>
+      )}
+    </Card>
+  );
+
+  const renderCardsTable = () => (
+    <Card elevation={1} style={styles.tableCard}>
+      <ThemedText type="subtitle" style={styles.tableTitle}>
+        Cards Received
+      </ThemedText>
+      {cardsReceived.length === 0 ? (
+        <ThemedText type="caption" style={styles.noDataText}>
+          No cards recorded
+        </ThemedText>
+      ) : (
+        <View style={styles.table}>
+          <View style={styles.tableHeader}>
+            <ThemedText type="caption" style={[styles.tableHeaderCell, styles.rankCell]}>
+              #
+            </ThemedText>
+            <ThemedText type="caption" style={[styles.tableHeaderCell, styles.playerCell]}>
+              Player
+            </ThemedText>
+            <ThemedText type="caption" style={[styles.tableHeaderCell, styles.cardCell]}>
+              Y
+            </ThemedText>
+            <ThemedText type="caption" style={[styles.tableHeaderCell, styles.cardCell]}>
+              R
+            </ThemedText>
+          </View>
+          {cardsReceived.map((item: any, index) => (
+            <View key={item.playerId} style={styles.tableRow}>
+              <ThemedText type="body" style={[styles.tableCell, styles.rankCell]}>
+                {index + 1}
+              </ThemedText>
+              <ThemedText type="body" style={[styles.tableCell, styles.playerCell]} numberOfLines={1}>
+                {item.squadNumber ? `${item.squadNumber}. ` : ""}{item.playerName}
+              </ThemedText>
+              <ThemedText type="body" style={[styles.tableCell, styles.cardCell, { color: AppColors.warningYellow }]}>
+                {item.yellowCards}
+              </ThemedText>
+              <ThemedText type="body" style={[styles.tableCell, styles.cardCell, { color: AppColors.redCard }]}>
+                {item.redCards}
+              </ThemedText>
+            </View>
+          ))}
+        </View>
+      )}
+    </Card>
+  );
+
+  const renderMinutesTable = () => (
+    <Card elevation={1} style={styles.tableCard}>
+      <ThemedText type="subtitle" style={styles.tableTitle}>
+        Minutes Played
+      </ThemedText>
+      {playerMinutes.length === 0 ? (
+        <ThemedText type="caption" style={styles.noDataText}>
+          No data available
+        </ThemedText>
+      ) : (
+        <View style={styles.table}>
+          <View style={styles.tableHeader}>
+            <ThemedText type="caption" style={[styles.tableHeaderCell, styles.rankCell]}>
+              #
+            </ThemedText>
+            <ThemedText type="caption" style={[styles.tableHeaderCell, styles.playerCell]}>
+              Player
+            </ThemedText>
+            <ThemedText type="caption" style={[styles.tableHeaderCell, styles.valueCell]}>
+              Mins
+            </ThemedText>
+            <ThemedText type="caption" style={[styles.tableHeaderCell, styles.cardCell]}>
+              MP
+            </ThemedText>
+          </View>
+          {playerMinutes.map((item, index) => (
+            <View key={item.playerId} style={styles.tableRow}>
+              <ThemedText type="body" style={[styles.tableCell, styles.rankCell]}>
+                {index + 1}
+              </ThemedText>
+              <ThemedText type="body" style={[styles.tableCell, styles.playerCell]} numberOfLines={1}>
+                {item.squadNumber ? `${item.squadNumber}. ` : ""}{item.playerName}
+              </ThemedText>
+              <ThemedText type="body" style={[styles.tableCell, styles.valueCell]}>
+                {item.count}
+              </ThemedText>
+              <ThemedText type="body" style={[styles.tableCell, styles.cardCell]}>
+                {item.matches}
+              </ThemedText>
+            </View>
+          ))}
+        </View>
+      )}
+    </Card>
+  );
+
+  if (loading) {
+    return (
+      <ThemedView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <ThemedText type="body">Loading stats...</ThemedText>
+        </View>
+      </ThemedView>
+    );
+  }
+
+  return (
+    <ThemedView style={styles.container}>
+      <ScrollView
+        contentContainerStyle={[
+          styles.scrollContent,
+          {
+            paddingTop: headerHeight + Spacing.md,
+            paddingBottom: tabBarHeight + Spacing.xl,
+          },
+        ]}
+        showsVerticalScrollIndicator={false}
+      >
+        <ThemedText type="h2" style={styles.screenTitle}>
+          Statistics
+        </ThemedText>
+
+        {renderFilterButtons()}
+
+        <ThemedText type="caption" style={styles.matchCount}>
+          {filteredMatches.length} completed {filteredMatches.length === 1 ? "match" : "matches"}
+        </ThemedText>
+
+        <Card elevation={1} style={styles.chartCard}>
+          <ThemedText type="subtitle" style={styles.chartTitle}>
+            Results
+          </ThemedText>
+          {renderPieChart([
+            { value: resultsData.wins, color: AppColors.pitchGreen, label: "Wins" },
+            { value: resultsData.draws, color: "#666666", label: "Draws" },
+            { value: resultsData.losses, color: AppColors.redCard, label: "Losses" },
+          ])}
+        </Card>
+
+        <Card elevation={1} style={styles.chartCard}>
+          <ThemedText type="subtitle" style={styles.chartTitle}>
+            Goal Sources
+          </ThemedText>
+          {renderPieChart([
+            { value: goalsData.openPlay, color: AppColors.pitchGreen, label: "Open Play" },
+            { value: goalsData.corner, color: "#3a5a8a", label: "Corner" },
+            { value: goalsData.freeKick, color: "#6a4a8a", label: "Free Kick" },
+            { value: goalsData.penalty, color: "#f57c00", label: "Penalty" },
+          ])}
+        </Card>
+
+        {renderTable("Top Scorers", topScorers, "Goals")}
+        {renderTable("Top Assists", topAssists, "Assists")}
+        {renderCardsTable()}
+        {renderMinutesTable()}
+      </ScrollView>
+    </ThemedView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1 },
+  loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
+  scrollContent: { paddingHorizontal: Spacing.lg },
+  screenTitle: { marginBottom: Spacing.md },
+  filterRow: { flexDirection: "row", gap: Spacing.sm, marginBottom: Spacing.md },
+  filterButton: {
+    paddingVertical: Spacing.xs,
+    paddingHorizontal: Spacing.md,
+    borderRadius: BorderRadius.xs,
+    backgroundColor: AppColors.elevated,
+  },
+  filterButtonActive: { backgroundColor: AppColors.pitchGreen },
+  filterButtonText: { color: AppColors.textSecondary },
+  filterButtonTextActive: { color: "#FFFFFF" },
+  matchCount: { color: AppColors.textSecondary, marginBottom: Spacing.lg },
+  chartCard: { marginBottom: Spacing.lg, padding: Spacing.lg },
+  chartTitle: { marginBottom: Spacing.md },
+  pieChartContainer: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  pieChart: { justifyContent: "center", alignItems: "center" },
+  pieChartCenter: { position: "absolute", justifyContent: "center", alignItems: "center" },
+  pieLegend: { flex: 1, marginLeft: Spacing.lg },
+  legendItem: { flexDirection: "row", alignItems: "center", marginBottom: Spacing.xs },
+  legendDot: { width: 10, height: 10, borderRadius: 5, marginRight: Spacing.xs },
+  legendText: { color: AppColors.textSecondary },
+  tableCard: { marginBottom: Spacing.lg, padding: Spacing.lg },
+  tableTitle: { marginBottom: Spacing.md },
+  noDataText: { color: AppColors.textSecondary, textAlign: "center", paddingVertical: Spacing.md },
+  table: { borderRadius: BorderRadius.xs, overflow: "hidden" },
+  tableHeader: { flexDirection: "row", backgroundColor: AppColors.elevated, paddingVertical: Spacing.sm },
+  tableHeaderCell: { color: AppColors.textSecondary, fontWeight: "600" },
+  tableRow: { flexDirection: "row", paddingVertical: Spacing.sm, borderBottomWidth: 1, borderBottomColor: AppColors.elevated },
+  tableCell: { color: "#FFFFFF" },
+  rankCell: { width: 30, textAlign: "center" },
+  playerCell: { flex: 1, paddingRight: Spacing.sm },
+  valueCell: { width: 50, textAlign: "center" },
+  cardCell: { width: 30, textAlign: "center" },
+});

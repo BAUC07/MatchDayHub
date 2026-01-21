@@ -5,6 +5,7 @@ import { BlurView } from "expo-blur";
 import { Platform, StyleSheet } from "react-native";
 import TeamsStackNavigator from "@/navigation/TeamsStackNavigator";
 import MatchesStackNavigator from "@/navigation/MatchesStackNavigator";
+import StatsStackNavigator from "@/navigation/StatsStackNavigator";
 import SettingsStackNavigator from "@/navigation/SettingsStackNavigator";
 import { useTheme } from "@/hooks/useTheme";
 import { AppColors } from "@/constants/theme";
@@ -12,6 +13,7 @@ import { AppColors } from "@/constants/theme";
 export type MainTabParamList = {
   TeamsTab: undefined;
   MatchesTab: undefined;
+  StatsTab: undefined;
   SettingsTab: undefined;
 };
 
@@ -64,6 +66,16 @@ export default function MainTabNavigator() {
           title: "Matches",
           tabBarIcon: ({ color, size }) => (
             <Feather name="list" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tab.Screen
+        name="StatsTab"
+        component={StatsStackNavigator}
+        options={{
+          title: "Stats",
+          tabBarIcon: ({ color, size }) => (
+            <Feather name="bar-chart-2" size={size} color={color} />
           ),
         }}
       />
