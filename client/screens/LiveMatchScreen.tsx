@@ -46,6 +46,10 @@ export default function LiveMatchScreen() {
   const [showTimeline, setShowTimeline] = useState(false);
   const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
   const [showEndConfirm, setShowEndConfirm] = useState(false);
+  const [isHalfTime, setIsHalfTime] = useState(false);
+  const [isSecondHalf, setIsSecondHalf] = useState(false);
+  const [firstHalfAddedTime, setFirstHalfAddedTime] = useState(0);
+  const [secondHalfAddedTime, setSecondHalfAddedTime] = useState(0);
 
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const lastSaveRef = useRef<number>(0);
@@ -56,6 +60,10 @@ export default function LiveMatchScreen() {
       if (matchData) {
         setMatch(matchData);
         setMatchTime(matchData.totalMatchTime);
+        setIsHalfTime(matchData.isHalfTime || false);
+        setIsSecondHalf(matchData.halfTimeTriggered || false);
+        setFirstHalfAddedTime(matchData.firstHalfAddedTime || 0);
+        setSecondHalfAddedTime(matchData.secondHalfAddedTime || 0);
         const teamData = await getTeam(matchData.teamId);
         setTeam(teamData);
       }
@@ -90,15 +98,77 @@ export default function LiveMatchScreen() {
     const now = Date.now();
     if (match && now - lastSaveRef.current > 5000) {
       lastSaveRef.current = now;
-      const updatedMatch = { ...match, totalMatchTime: matchTime };
+      const updatedMatch = {
+        ...match,
+        totalMatchTime: matchTime,
+        isHalfTime,
+        halfTimeTriggered: isSecondHalf,
+        firstHalfAddedTime,
+        secondHalfAddedTime,
+      };
       saveMatch(updatedMatch);
     }
-  }, [matchTime, match]);
+  }, [matchTime, match, isHalfTime, isSecondHalf, firstHalfAddedTime, secondHalfAddedTime]);
+
+  const plannedDuration = (match?.plannedDuration || 60) * 60;
+  const halfDuration = plannedDuration / 2;
+
+  const getTimeDisplay = useCallback(() => {
+    if (!match) return { main: "00:00", added: "" };
+    
+    const halfMins = Math.floor(halfDuration / 60);
+    const fullMins = Math.floor(plannedDuration / 60);
+    
+    if (!isSecondHalf) {
+      if (matchTime <= halfDuration) {
+        return { main: formatMatchTime(matchTime), added: "" };
+      } else {
+        const addedSecs = matchTime - halfDuration;
+        const addedMins = Math.floor(addedSecs / 60);
+        const addedRemSecs = addedSecs % 60;
+        return { 
+          main: `${halfMins}'`, 
+          added: `+${addedMins}:${addedRemSecs.toString().padStart(2, "0")}` 
+        };
+      }
+    } else {
+      const secondHalfTime = matchTime - halfDuration - firstHalfAddedTime;
+      const displayTime = halfDuration + secondHalfTime;
+      
+      if (displayTime <= plannedDuration) {
+        return { main: formatMatchTime(displayTime), added: "" };
+      } else {
+        const addedSecs = displayTime - plannedDuration;
+        const addedMins = Math.floor(addedSecs / 60);
+        const addedRemSecs = addedSecs % 60;
+        return { 
+          main: `${fullMins}'`, 
+          added: `+${addedMins}:${addedRemSecs.toString().padStart(2, "0")}` 
+        };
+      }
+    }
+  }, [match, matchTime, isSecondHalf, halfDuration, plannedDuration, firstHalfAddedTime]);
 
   const handleToggleClock = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    if (isHalfTime) {
+      setIsHalfTime(false);
+      setIsSecondHalf(true);
+      setFirstHalfAddedTime(matchTime > halfDuration ? matchTime - halfDuration : 0);
+    }
     setIsRunning((prev) => !prev);
-  }, []);
+  }, [isHalfTime, matchTime, halfDuration]);
+
+  const handleHalfTime = useCallback(() => {
+    if (!isSecondHalf) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setIsRunning(false);
+      setIsHalfTime(true);
+      if (matchTime > halfDuration) {
+        setFirstHalfAddedTime(matchTime - halfDuration);
+      }
+    }
+  }, [isSecondHalf, matchTime, halfDuration]);
 
   const handlePauseLongPress = useCallback(() => {
     if (isRunning) {
@@ -378,9 +448,16 @@ export default function LiveMatchScreen() {
       </View>
 
       <View style={styles.clockSection}>
-        <ThemedText type="h2" style={styles.clockText}>
-          {formatMatchTime(matchTime)}
-        </ThemedText>
+        <View style={styles.timeDisplay}>
+          <ThemedText type="h2" style={styles.clockText}>
+            {getTimeDisplay().main}
+          </ThemedText>
+          {getTimeDisplay().added ? (
+            <ThemedText type="body" style={styles.addedTimeText}>
+              {getTimeDisplay().added}
+            </ThemedText>
+          ) : null}
+        </View>
         <Pressable
           onPress={handleToggleClock}
           onLongPress={handlePauseLongPress}
@@ -397,6 +474,18 @@ export default function LiveMatchScreen() {
           />
         </Pressable>
       </View>
+
+      {isHalfTime ? (
+        <View style={styles.halfTimeIndicator}>
+          <ThemedText type="body" style={styles.halfTimeText}>HALF TIME</ThemedText>
+        </View>
+      ) : (
+        <View style={styles.periodIndicator}>
+          <ThemedText type="caption" style={{ color: AppColors.textSecondary }}>
+            {isSecondHalf ? "2nd Half" : "1st Half"}
+          </ThemedText>
+        </View>
+      )}
 
       <View style={styles.teamsRow}>
         <ThemedText type="small" style={styles.teamLabel}>
@@ -546,13 +635,13 @@ export default function LiveMatchScreen() {
           <Pressable
             style={({ pressed }) => [
               styles.actionButton,
-              styles.endButton,
+              isSecondHalf ? styles.endButton : styles.halfTimeButton,
               { opacity: pressed ? 0.9 : 1 },
             ]}
-            onPress={handleEndMatch}
+            onPress={isSecondHalf ? handleEndMatch : handleHalfTime}
           >
             <ThemedText type="button" style={styles.actionButtonText}>
-              END
+              {isSecondHalf ? "END" : "HT"}
             </ThemedText>
           </Pressable>
         </View>
@@ -974,10 +1063,15 @@ const styles = StyleSheet.create({
   scoreSection: { flexDirection: "row", alignItems: "center", justifyContent: "center" },
   scoreText: { color: "#FFFFFF", minWidth: 50, textAlign: "center" },
   scoreDivider: { color: AppColors.textSecondary, marginHorizontal: Spacing.md },
-  clockSection: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: Spacing.md, marginBottom: Spacing.sm },
+  clockSection: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: Spacing.md, marginBottom: Spacing.xs },
+  timeDisplay: { flexDirection: "row", alignItems: "baseline", gap: Spacing.xs },
   clockText: { color: "#FFFFFF", fontVariant: ["tabular-nums"] },
+  addedTimeText: { color: AppColors.pitchGreen, fontWeight: "700" },
   clockButton: { width: 40, height: 40, borderRadius: 20, backgroundColor: AppColors.pitchGreen, justifyContent: "center", alignItems: "center" },
-  teamsRow: { flexDirection: "row", justifyContent: "center", alignItems: "center", gap: Spacing.md, marginBottom: Spacing.md },
+  halfTimeIndicator: { alignItems: "center", marginBottom: Spacing.xs },
+  halfTimeText: { color: AppColors.warningYellow, fontWeight: "700" },
+  periodIndicator: { alignItems: "center", marginBottom: Spacing.xs },
+  teamsRow: { flexDirection: "row", justifyContent: "center", alignItems: "center", gap: Spacing.md, marginBottom: Spacing.sm },
   teamLabel: { color: AppColors.textSecondary, maxWidth: 120 },
   vsLabel: { color: AppColors.textDisabled },
   middleZone: { flex: 1, paddingHorizontal: Spacing.md },
@@ -1003,6 +1097,7 @@ const styles = StyleSheet.create({
   goalAgainstButton: { backgroundColor: "#4a4a4a" },
   cardButton: { backgroundColor: AppColors.warningYellow },
   subButton: { backgroundColor: "#3a5a8a" },
+  halfTimeButton: { backgroundColor: "#f57c00" },
   penaltyButton: { backgroundColor: "#6a4a8a" },
   endButton: { backgroundColor: AppColors.redCard },
 });
