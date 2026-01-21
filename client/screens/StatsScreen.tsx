@@ -249,7 +249,7 @@ export default function StatsScreen() {
             />
           </Svg>
           <View style={styles.pieChartCenter}>
-            <ThemedText type="caption" style={{ color: AppColors.textSecondary }}>
+            <ThemedText type="small" style={{ color: AppColors.textSecondary }}>
               No data
             </ThemedText>
           </View>
@@ -297,7 +297,7 @@ export default function StatsScreen() {
           {data.map((segment, index) => (
             <View key={index} style={styles.legendItem}>
               <View style={[styles.legendDot, { backgroundColor: segment.color }]} />
-              <ThemedText type="caption" style={styles.legendText}>
+              <ThemedText type="small" style={styles.legendText}>
                 {segment.label}: {segment.value}
               </ThemedText>
             </View>
@@ -319,7 +319,7 @@ export default function StatsScreen() {
           onPress={() => setFilter(f)}
         >
           <ThemedText
-            type="caption"
+            type="small"
             style={[
               styles.filterButtonText,
               filter === f && styles.filterButtonTextActive,
@@ -338,23 +338,23 @@ export default function StatsScreen() {
     valueLabel: string = "Count"
   ) => (
     <Card elevation={1} style={styles.tableCard}>
-      <ThemedText type="subtitle" style={styles.tableTitle}>
+      <ThemedText type="h4" style={styles.tableTitle}>
         {title}
       </ThemedText>
       {data.length === 0 ? (
-        <ThemedText type="caption" style={styles.noDataText}>
+        <ThemedText type="small" style={styles.noDataText}>
           No data available
         </ThemedText>
       ) : (
         <View style={styles.table}>
           <View style={styles.tableHeader}>
-            <ThemedText type="caption" style={[styles.tableHeaderCell, styles.rankCell]}>
+            <ThemedText type="small" style={[styles.tableHeaderCell, styles.rankCell]}>
               #
             </ThemedText>
-            <ThemedText type="caption" style={[styles.tableHeaderCell, styles.playerCell]}>
+            <ThemedText type="small" style={[styles.tableHeaderCell, styles.playerCell]}>
               Player
             </ThemedText>
-            <ThemedText type="caption" style={[styles.tableHeaderCell, styles.valueCell]}>
+            <ThemedText type="small" style={[styles.tableHeaderCell, styles.valueCell]}>
               {valueLabel}
             </ThemedText>
           </View>
@@ -378,26 +378,26 @@ export default function StatsScreen() {
 
   const renderCardsTable = () => (
     <Card elevation={1} style={styles.tableCard}>
-      <ThemedText type="subtitle" style={styles.tableTitle}>
+      <ThemedText type="h4" style={styles.tableTitle}>
         Cards Received
       </ThemedText>
       {cardsReceived.length === 0 ? (
-        <ThemedText type="caption" style={styles.noDataText}>
+        <ThemedText type="small" style={styles.noDataText}>
           No cards recorded
         </ThemedText>
       ) : (
         <View style={styles.table}>
           <View style={styles.tableHeader}>
-            <ThemedText type="caption" style={[styles.tableHeaderCell, styles.rankCell]}>
+            <ThemedText type="small" style={[styles.tableHeaderCell, styles.rankCell]}>
               #
             </ThemedText>
-            <ThemedText type="caption" style={[styles.tableHeaderCell, styles.playerCell]}>
+            <ThemedText type="small" style={[styles.tableHeaderCell, styles.playerCell]}>
               Player
             </ThemedText>
-            <ThemedText type="caption" style={[styles.tableHeaderCell, styles.cardCell]}>
+            <ThemedText type="small" style={[styles.tableHeaderCell, styles.cardCell]}>
               Y
             </ThemedText>
-            <ThemedText type="caption" style={[styles.tableHeaderCell, styles.cardCell]}>
+            <ThemedText type="small" style={[styles.tableHeaderCell, styles.cardCell]}>
               R
             </ThemedText>
           </View>
@@ -424,26 +424,26 @@ export default function StatsScreen() {
 
   const renderMinutesTable = () => (
     <Card elevation={1} style={styles.tableCard}>
-      <ThemedText type="subtitle" style={styles.tableTitle}>
+      <ThemedText type="h4" style={styles.tableTitle}>
         Minutes Played
       </ThemedText>
       {playerMinutes.length === 0 ? (
-        <ThemedText type="caption" style={styles.noDataText}>
+        <ThemedText type="small" style={styles.noDataText}>
           No data available
         </ThemedText>
       ) : (
         <View style={styles.table}>
           <View style={styles.tableHeader}>
-            <ThemedText type="caption" style={[styles.tableHeaderCell, styles.rankCell]}>
+            <ThemedText type="small" style={[styles.tableHeaderCell, styles.rankCell]}>
               #
             </ThemedText>
-            <ThemedText type="caption" style={[styles.tableHeaderCell, styles.playerCell]}>
+            <ThemedText type="small" style={[styles.tableHeaderCell, styles.playerCell]}>
               Player
             </ThemedText>
-            <ThemedText type="caption" style={[styles.tableHeaderCell, styles.valueCell]}>
+            <ThemedText type="small" style={[styles.tableHeaderCell, styles.valueCell]}>
               Mins
             </ThemedText>
-            <ThemedText type="caption" style={[styles.tableHeaderCell, styles.cardCell]}>
+            <ThemedText type="small" style={[styles.tableHeaderCell, styles.cardCell]}>
               MP
             </ThemedText>
           </View>
@@ -496,12 +496,12 @@ export default function StatsScreen() {
 
         {renderFilterButtons()}
 
-        <ThemedText type="caption" style={styles.matchCount}>
+        <ThemedText type="small" style={styles.matchCount}>
           {filteredMatches.length} completed {filteredMatches.length === 1 ? "match" : "matches"}
         </ThemedText>
 
         <Card elevation={1} style={styles.chartCard}>
-          <ThemedText type="subtitle" style={styles.chartTitle}>
+          <ThemedText type="h4" style={styles.chartTitle}>
             Results
           </ThemedText>
           {renderPieChart([
@@ -512,7 +512,7 @@ export default function StatsScreen() {
         </Card>
 
         <Card elevation={1} style={styles.chartCard}>
-          <ThemedText type="subtitle" style={styles.chartTitle}>
+          <ThemedText type="h4" style={styles.chartTitle}>
             Goal Sources
           </ThemedText>
           {renderPieChart([

@@ -15,7 +15,7 @@ MVP complete with core functionality:
 ## Architecture
 
 ### Frontend (Expo React Native)
-- **Navigation**: React Navigation 7+ with tab bar (Teams, Matches, Settings)
+- **Navigation**: React Navigation 7+ with tab bar (Teams, Matches, Stats, Settings)
 - **State Management**: Local state with AsyncStorage persistence
 - **UI Framework**: Custom components following Stadium Bold design system
 - **Styling**: Dark theme with pitch green (#00A86B) accents
@@ -53,12 +53,27 @@ MVP complete with core functionality:
 
 ### Live Match (Critical - No Scroll)
 - Three-zone fixed layout:
-  1. Top: Score + clock + timeline access
+  1. Top: Score + clock + period indicator + timeline access
   2. Middle: Pitch diagram with players + bench
-  3. Bottom: Action buttons (GOAL+, GOAL-, CARD, SUB, PENALTY, END)
+  3. Bottom: Action buttons (GOAL+, GOAL-, CARD, SUB, PENALTY, HT/END)
+- Smart timer with half-time logic:
+  - Counts up to half-time (plannedDuration/2), then shows added time (e.g., "45+2:30")
+  - HT button triggers half-time break, resumes for second half
+  - Button dynamically changes from "HT" to "END" in second half
+  - Period indicator shows "1st Half", "HALF TIME", or "2nd Half"
 - All events logged with timestamp
 - Undo last event supported
 - Pause/resume clock (long-press to pause)
+- Timeline filter to hide substitution events
+
+### Stats Tab
+- Filter by All/Home/Away matches
+- Results pie chart (wins, draws, losses)
+- Goal Sources pie chart (open play, corner, free kick, penalty)
+- Top Scorers table with goal counts
+- Top Assists table with assist counts
+- Cards Received table (yellow and red card breakdown)
+- Minutes Played table with match appearances
 
 ### Match Summary
 - Final score with result badge
@@ -98,6 +113,7 @@ client/
 │   ├── MatchSetupScreen.tsx
 │   ├── LiveMatchScreen.tsx
 │   ├── MatchSummaryScreen.tsx
+│   ├── StatsScreen.tsx
 │   └── SettingsScreen.tsx
 └── types/
     └── index.ts               # TypeScript interfaces
@@ -111,8 +127,8 @@ server/
 ## Data Models
 - **Team**: id, name, players[], stats (matches, wins, draws, losses)
 - **Player**: id, name, squadNumber?, state (managed at match time)
-- **Match**: id, teamId, opposition, location, format, lineup, events[], scores
-- **MatchEvent**: id, type, timestamp, playerId, details
+- **Match**: id, teamId, opposition, location, format, lineup, events[], scores, plannedDuration, firstHalfAddedTime, secondHalfAddedTime, isHalfTime, halfTimeTriggered
+- **MatchEvent**: id, type, timestamp, playerId, assistPlayerId, goalType, cardType, penaltyOutcome, playerOffId, playerOnId
 
 ## Design System
 
@@ -137,6 +153,11 @@ server/
 - Haptic feedback on all interactions
 
 ## Recent Changes
+- Added Stats tab with pie charts and player statistics tables
+- Redesigned timer with half-time logic and added time tracking
+- Half-time button (HT) that becomes END button in second half
+- Period indicator showing current match state
+- Timeline filter to hide substitution events
 - Simplified squad editor (removed player state selection)
 - Added lineup selection to match setup screen
 - Prominent "Create Team" card on Teams screen
