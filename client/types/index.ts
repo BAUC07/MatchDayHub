@@ -54,8 +54,12 @@ export interface Match {
   scoreAgainst: number;
   isCompleted: boolean;
   totalMatchTime: number; // in seconds
-  addedTime: number; // in seconds
+  addedTime: number; // in seconds (deprecated, use firstHalfAddedTime + secondHalfAddedTime)
   plannedDuration?: number; // planned game duration in minutes
+  firstHalfAddedTime?: number; // added time in first half (seconds)
+  secondHalfAddedTime?: number; // added time in second half (seconds)
+  isHalfTime?: boolean; // whether currently at half time
+  halfTimeTriggered?: boolean; // whether half time was triggered
 }
 
 export interface SubscriptionState {

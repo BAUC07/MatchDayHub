@@ -882,6 +882,9 @@ interface TimelineSheetProps {
 
 function TimelineSheet({ visible, events, players, onClose }: TimelineSheetProps) {
   const insets = useSafeAreaInsets();
+  const [hideSubs, setHideSubs] = useState(false);
+
+  const filteredEvents = hideSubs ? events.filter(e => e.type !== "substitution") : events;
 
   const getPlayerName = (id?: string) => {
     if (!id) return "";
@@ -935,14 +938,18 @@ function TimelineSheet({ visible, events, players, onClose }: TimelineSheetProps
           <Feather name="x" size={24} color={AppColors.textSecondary} />
         </Pressable>
         <ThemedText type="h4" style={sheetStyles.title}>Match Timeline</ThemedText>
-        {events.length === 0 ? (
+        <Pressable style={sheetStyles.filterToggle} onPress={() => setHideSubs(!hideSubs)}>
+          <Feather name={hideSubs ? "check-square" : "square"} size={18} color={AppColors.textSecondary} />
+          <ThemedText type="caption" style={{ color: AppColors.textSecondary }}>Hide substitutions</ThemedText>
+        </Pressable>
+        {filteredEvents.length === 0 ? (
           <View style={sheetStyles.emptyTimeline}>
             <Feather name="clock" size={32} color={AppColors.textSecondary} />
             <ThemedText type="body" style={{ color: AppColors.textSecondary }}>No events yet</ThemedText>
           </View>
         ) : (
           <FlatList
-            data={[...events].reverse()}
+            data={[...filteredEvents].reverse()}
             keyExtractor={(item) => item.id}
             renderItem={({ item }) => (
               <View style={sheetStyles.timelineItem}>
@@ -1029,6 +1036,7 @@ const sheetStyles = StyleSheet.create({
   timelineItem: { flexDirection: "row", alignItems: "center", gap: Spacing.md, paddingVertical: Spacing.md, borderBottomWidth: 1, borderBottomColor: AppColors.elevated },
   timelineTime: { color: AppColors.textSecondary, width: 50 },
   timelineText: { flex: 1 },
+  filterToggle: { flexDirection: "row", alignItems: "center", gap: Spacing.sm, paddingVertical: Spacing.sm, marginBottom: Spacing.sm },
 });
 
 const confirmStyles = StyleSheet.create({
