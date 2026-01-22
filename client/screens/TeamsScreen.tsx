@@ -20,8 +20,9 @@ import { ThemedText } from "@/components/ThemedText";
 import { Card } from "@/components/Card";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, AppColors, BorderRadius } from "@/constants/theme";
-import { Team, SubscriptionState } from "@/types";
-import { getTeams, getSubscription } from "@/lib/storage";
+import { Team } from "@/types";
+import { getTeams } from "@/lib/storage";
+import { useRevenueCat } from "@/lib/revenuecat";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
@@ -32,23 +33,16 @@ export default function TeamsScreen() {
   const tabBarHeight = useBottomTabBarHeight();
   const { theme } = useTheme();
   const navigation = useNavigation<NavigationProp>();
+  const { isElite } = useRevenueCat();
 
   const [teams, setTeams] = useState<Team[]>([]);
-  const [subscription, setSubscription] = useState<SubscriptionState>({
-    isElite: false,
-    maxTeams: 1,
-  });
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
   const loadData = useCallback(async () => {
     try {
-      const [teamsData, subData] = await Promise.all([
-        getTeams(),
-        getSubscription(),
-      ]);
+      const teamsData = await getTeams();
       setTeams(teamsData);
-      setSubscription(subData);
     } catch (error) {
       console.error("Error loading teams:", error);
     } finally {
@@ -68,7 +62,7 @@ export default function TeamsScreen() {
     loadData();
   }, [loadData]);
 
-  const canAddTeam = subscription.isElite || teams.length < subscription.maxTeams;
+  const canAddTeam = isElite || teams.length < 1;
 
   const handleAddTeam = useCallback(() => {
     if (canAddTeam) {
@@ -76,6 +70,7 @@ export default function TeamsScreen() {
       navigation.navigate("CreateTeam");
     } else {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      navigation.navigate("Paywall");
     }
   }, [canAddTeam, navigation]);
 

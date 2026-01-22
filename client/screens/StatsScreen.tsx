@@ -25,8 +25,12 @@ import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
 import { Card } from "@/components/Card";
 import { Spacing, AppColors, BorderRadius } from "@/constants/theme";
-import { Match, MatchEvent, Team, Player, SubscriptionState } from "@/types";
-import { getMatches, getTeams, getSubscription, saveSubscription } from "@/lib/storage";
+import { Match, MatchEvent, Team, Player } from "@/types";
+import { getMatches, getTeams } from "@/lib/storage";
+import { useRevenueCat } from "@/lib/revenuecat";
+import { useNavigation } from "@react-navigation/native";
+import { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { RootStackParamList } from "@/navigation/RootStackNavigator";
 
 type FilterType = "all" | "home" | "away";
 
@@ -76,14 +80,17 @@ interface GoalsConcededStat {
   cleanSheets: number;
 }
 
+type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
+
 export default function StatsScreen() {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
   const tabBarHeight = useBottomTabBarHeight();
+  const navigation = useNavigation<NavigationProp>();
+  const { isElite } = useRevenueCat();
 
   const [matches, setMatches] = useState<Match[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
-  const [subscription, setSubscription] = useState<SubscriptionState | null>(null);
   const [filter, setFilter] = useState<FilterType>("all");
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -98,14 +105,12 @@ export default function StatsScreen() {
 
   const loadData = useCallback(async () => {
     try {
-      const [matchesData, teamsData, subscriptionData] = await Promise.all([
+      const [matchesData, teamsData] = await Promise.all([
         getMatches(),
         getTeams(),
-        getSubscription(),
       ]);
       setMatches(matchesData.filter(m => m.isCompleted));
       setTeams(teamsData);
-      setSubscription(subscriptionData);
       setSelectedTeamId((prev) => {
         if (prev === null && teamsData.length > 0) {
           return teamsData[0].id;
@@ -119,12 +124,10 @@ export default function StatsScreen() {
     }
   }, []);
 
-  const handleUpgrade = useCallback(async () => {
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    const newSub = { isElite: true, maxTeams: 999 };
-    await saveSubscription(newSub);
-    setSubscription(newSub);
-  }, []);
+  const handleUpgrade = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    navigation.navigate("Paywall");
+  }, [navigation]);
 
   useFocusEffect(
     useCallback(() => {
@@ -1025,7 +1028,7 @@ export default function StatsScreen() {
     );
   }
 
-  if (!subscription?.isElite) {
+  if (!isElite) {
     return (
       <ThemedView style={styles.container}>
         <View style={[styles.lockedContainer, { paddingTop: headerHeight + Spacing.xl, paddingBottom: tabBarHeight + Spacing.xl }]}>

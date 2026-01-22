@@ -1,9 +1,10 @@
-import React, { useState, useCallback } from "react";
-import { View, StyleSheet, Image, Pressable, Switch, ScrollView } from "react-native";
+import React, { useCallback } from "react";
+import { View, StyleSheet, Image, Pressable, Switch, ScrollView, Linking, Platform, Alert } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
-import { useFocusEffect } from "@react-navigation/native";
+import { useNavigation } from "@react-navigation/native";
+import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 
@@ -11,51 +12,47 @@ import { ThemedText } from "@/components/ThemedText";
 import { Card } from "@/components/Card";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, AppColors, BorderRadius } from "@/constants/theme";
-import { SubscriptionState } from "@/types";
-import { getSubscription, saveSubscription } from "@/lib/storage";
+import { useRevenueCat } from "@/lib/revenuecat";
+import { RootStackParamList } from "@/navigation/RootStackNavigator";
+
+type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
 export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
   const tabBarHeight = useBottomTabBarHeight();
   const { theme } = useTheme();
+  const navigation = useNavigation<NavigationProp>();
+  const { isElite, restorePurchases } = useRevenueCat();
 
-  const [subscription, setSubscription] = useState<SubscriptionState>({
-    isElite: false,
-    maxTeams: 1,
-  });
-  const [loading, setLoading] = useState(true);
+  const handleUpgrade = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    navigation.navigate("Paywall");
+  }, [navigation]);
 
-  const loadData = useCallback(async () => {
-    try {
-      const subData = await getSubscription();
-      setSubscription(subData);
-    } catch (error) {
-      console.error("Error loading subscription:", error);
-    } finally {
-      setLoading(false);
+  const handleManageSubscription = useCallback(async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (Platform.OS === 'ios') {
+      await Linking.openURL('https://apps.apple.com/account/subscriptions');
+    } else if (Platform.OS === 'android') {
+      await Linking.openURL('https://play.google.com/store/account/subscriptions');
     }
   }, []);
 
-  useFocusEffect(
-    useCallback(() => {
-      loadData();
-    }, [loadData])
-  );
-
-  const handleUpgrade = useCallback(async () => {
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    const newSub = { isElite: true, maxTeams: 999 };
-    await saveSubscription(newSub);
-    setSubscription(newSub);
-  }, []);
-
-  const handleDowngrade = useCallback(async () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    const newSub = { isElite: false, maxTeams: 1 };
-    await saveSubscription(newSub);
-    setSubscription(newSub);
-  }, []);
+  const handleRestorePurchases = useCallback(async () => {
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      const restored = await restorePurchases();
+      if (restored) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        Alert.alert('Restored!', 'Your Elite subscription has been restored.');
+      } else {
+        Alert.alert('No Purchases Found', 'We could not find any previous purchases to restore.');
+      }
+    } catch (error: any) {
+      Alert.alert('Restore Failed', error.message || 'Something went wrong');
+    }
+  }, [restorePurchases]);
 
   return (
     <ScrollView
@@ -79,7 +76,7 @@ export default function SettingsScreen() {
           <View style={styles.profileInfo}>
             <ThemedText type="h4">Manager</ThemedText>
             <ThemedText type="small" style={{ color: AppColors.textSecondary }}>
-              {subscription.isElite ? "Elite Member" : "Free Plan"}
+              {isElite ? "Elite Member" : "Free Plan"}
             </ThemedText>
           </View>
         </View>
@@ -93,16 +90,16 @@ export default function SettingsScreen() {
         <View style={styles.subscriptionHeader}>
           <View style={styles.planInfo}>
             <Feather
-              name={subscription.isElite ? "star" : "zap"}
+              name={isElite ? "star" : "zap"}
               size={24}
-              color={subscription.isElite ? AppColors.warningYellow : AppColors.pitchGreen}
+              color={isElite ? AppColors.warningYellow : AppColors.pitchGreen}
             />
             <View style={styles.planText}>
               <ThemedText type="h4">
-                {subscription.isElite ? "Elite" : "Free Plan"}
+                {isElite ? "Elite" : "Free Plan"}
               </ThemedText>
               <ThemedText type="small" style={{ color: AppColors.textSecondary }}>
-                {subscription.isElite
+                {isElite
                   ? "Unlimited teams and stats"
                   : "1 team maximum"}
               </ThemedText>
@@ -110,16 +107,16 @@ export default function SettingsScreen() {
           </View>
         </View>
 
-        {subscription.isElite ? (
+        {isElite ? (
           <Pressable
             style={({ pressed }) => [
               styles.manageButton,
               { opacity: pressed ? 0.8 : 1 },
             ]}
-            onPress={handleDowngrade}
+            onPress={handleManageSubscription}
           >
-            <ThemedText type="body" style={{ color: AppColors.textSecondary }}>
-              Cancel Subscription
+            <ThemedText type="body" style={{ color: AppColors.pitchGreen }}>
+              Manage Subscription
             </ThemedText>
           </Pressable>
         ) : (
@@ -148,6 +145,18 @@ export default function SettingsScreen() {
             >
               <ThemedText type="body" style={styles.upgradeButtonText}>
                 Upgrade to Elite
+              </ThemedText>
+            </Pressable>
+            
+            <Pressable
+              style={({ pressed }) => [
+                styles.restoreButton,
+                { opacity: pressed ? 0.8 : 1 },
+              ]}
+              onPress={handleRestorePurchases}
+            >
+              <ThemedText type="small" style={{ color: AppColors.textSecondary, textDecorationLine: 'underline' }}>
+                Restore Purchases
               </ThemedText>
             </Pressable>
           </View>
@@ -250,6 +259,11 @@ const styles = StyleSheet.create({
   },
   upgradeButtonText: {
     color: "#FFFFFF",
+  },
+  restoreButton: {
+    alignItems: "center",
+    marginTop: Spacing.md,
+    paddingVertical: Spacing.sm,
   },
   aboutCard: {
     padding: Spacing.lg,
