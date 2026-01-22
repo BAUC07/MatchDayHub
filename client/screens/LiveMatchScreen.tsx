@@ -9,6 +9,8 @@ import {
   Alert,
   ScrollView,
   LayoutChangeEvent,
+  AppState,
+  AppStateStatus,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
@@ -171,25 +173,34 @@ export default function LiveMatchScreen() {
     loadData();
   }, [loadData]);
 
+  // Timer effect using requestAnimationFrame for reliable visual updates
   useEffect(() => {
+    let animationFrameId: number | null = null;
+    let lastUpdateTime = 0;
+    
+    const updateTimer = () => {
+      if (timerStartRef.current) {
+        const now = Date.now();
+        // Only update state once per second to avoid excessive re-renders
+        if (now - lastUpdateTime >= 1000) {
+          lastUpdateTime = now;
+          const elapsed = Math.floor((now - timerStartRef.current) / 1000);
+          setMatchTime(accumulatedTimeRef.current + elapsed);
+        }
+      }
+      if (isRunning) {
+        animationFrameId = requestAnimationFrame(updateTimer);
+      }
+    };
+    
     if (isRunning) {
       // Use timestamp-based timing for accurate time on iOS
       if (!timerStartRef.current) {
         timerStartRef.current = Date.now();
       }
-      
-      intervalRef.current = setInterval(() => {
-        if (timerStartRef.current) {
-          const now = Date.now();
-          const elapsed = Math.floor((now - timerStartRef.current) / 1000);
-          setMatchTime(accumulatedTimeRef.current + elapsed);
-        }
-      }, 250); // Update more frequently for smoother display
+      // Start the animation loop
+      animationFrameId = requestAnimationFrame(updateTimer);
     } else {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-        intervalRef.current = null;
-      }
       // When stopping, save accumulated time
       if (timerStartRef.current) {
         const now = Date.now();
@@ -200,11 +211,25 @@ export default function LiveMatchScreen() {
     }
 
     return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-        intervalRef.current = null;
+      if (animationFrameId) {
+        cancelAnimationFrame(animationFrameId);
       }
     };
+  }, [isRunning]);
+
+  // AppState listener to recalculate time when app returns to foreground
+  useEffect(() => {
+    const handleAppStateChange = (nextAppState: AppStateStatus) => {
+      if (nextAppState === 'active' && isRunning && timerStartRef.current) {
+        // Recalculate time when app becomes active
+        const now = Date.now();
+        const elapsed = Math.floor((now - timerStartRef.current) / 1000);
+        setMatchTime(accumulatedTimeRef.current + elapsed);
+      }
+    };
+
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
+    return () => subscription.remove();
   }, [isRunning]);
 
   useEffect(() => {
