@@ -160,6 +160,9 @@ server/
 - Haptic feedback on all interactions
 
 ## Recent Changes
+- Integrated RevenueCat SDK for native in-app purchases (Monthly, Yearly, Lifetime tiers)
+- Added Paywall screen with package selection and restore purchases
+- Updated Settings, Stats, and Teams screens to use RevenueCat entitlement checks
 - Fixed timer reliability on iOS (uses timestamp-based timing that survives app backgrounding)
 - Added date range filtering on Stats tab (defaults to current football season starting Aug 1)
 - Rebranded subscription tier from "Premium" to "Elite" throughout app
