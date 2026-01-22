@@ -59,10 +59,12 @@ MVP complete with core functionality:
   2. Middle: Pitch diagram with players + bench
   3. Bottom: Action buttons (GOAL+, GOAL-, CARD, SUB, PENALTY, HT/END)
 - Smart timer with half-time logic:
+  - Uses timestamp-based timing for reliability on iOS (survives app backgrounding)
   - Counts up to half-time (plannedDuration/2), then shows added time (e.g., "45+2:30")
   - HT button triggers half-time break, resumes for second half
   - Button dynamically changes from "HT" to "END" in second half
   - Period indicator shows "1st Half", "HALF TIME", or "2nd Half"
+  - Timer state persisted with timestamps to restore accurate time after app restart
 - All events logged with timestamp
 - Undo last event supported
 - Pause/resume clock (long-press to pause)
@@ -158,6 +160,8 @@ server/
 - Haptic feedback on all interactions
 
 ## Recent Changes
+- Fixed timer reliability on iOS (uses timestamp-based timing that survives app backgrounding)
+- Added date range filtering on Stats tab (defaults to current football season starting Aug 1)
 - Rebranded subscription tier from "Premium" to "Elite" throughout app
 - Added PDF export for team statistics (generates professional PDF with results, goals, scorers)
 - Team selector on Stats tab when multiple teams exist

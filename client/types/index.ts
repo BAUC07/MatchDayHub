@@ -61,6 +61,8 @@ export interface Match {
   secondHalfAddedTime?: number; // added time in second half (seconds)
   isHalfTime?: boolean; // whether currently at half time
   halfTimeTriggered?: boolean; // whether half time was triggered
+  timerStartTimestamp?: number; // timestamp when timer was started (for accurate timing on iOS)
+  accumulatedTime?: number; // accumulated time before current timer session
 }
 
 export interface SubscriptionState {

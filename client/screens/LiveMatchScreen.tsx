@@ -128,19 +128,35 @@ export default function LiveMatchScreen() {
   const [playerPositions, setPlayerPositions] = useState<PlayerPosition[]>([]);
   const [pitchDimensions, setPitchDimensions] = useState({ width: 0, height: 0 });
 
-  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastSaveRef = useRef<number>(0);
+  const timerStartRef = useRef<number | null>(null);
+  const accumulatedTimeRef = useRef<number>(0);
 
   const loadData = useCallback(async () => {
     try {
       const matchData = await getMatch(route.params.matchId);
       if (matchData) {
         setMatch(matchData);
-        setMatchTime(matchData.totalMatchTime);
         setIsHalfTime(matchData.isHalfTime || false);
         setIsSecondHalf(matchData.halfTimeTriggered || false);
         setFirstHalfAddedTime(matchData.firstHalfAddedTime || 0);
         setSecondHalfAddedTime(matchData.secondHalfAddedTime || 0);
+        
+        // Restore timer state - if timer was running, calculate current time from timestamp
+        if (matchData.timerStartTimestamp && !matchData.isHalfTime && !matchData.isCompleted) {
+          const now = Date.now();
+          const elapsed = Math.floor((now - matchData.timerStartTimestamp) / 1000);
+          const totalTime = (matchData.accumulatedTime || 0) + elapsed;
+          setMatchTime(totalTime);
+          accumulatedTimeRef.current = matchData.accumulatedTime || 0;
+          timerStartRef.current = matchData.timerStartTimestamp;
+          setIsRunning(true);
+        } else {
+          setMatchTime(matchData.totalMatchTime);
+          accumulatedTimeRef.current = matchData.totalMatchTime;
+        }
+        
         const teamData = await getTeam(matchData.teamId);
         setTeam(teamData);
       }
@@ -157,16 +173,36 @@ export default function LiveMatchScreen() {
 
   useEffect(() => {
     if (isRunning) {
+      // Use timestamp-based timing for accurate time on iOS
+      if (!timerStartRef.current) {
+        timerStartRef.current = Date.now();
+      }
+      
       intervalRef.current = setInterval(() => {
-        setMatchTime((prev) => prev + 1);
-      }, 1000);
-    } else if (intervalRef.current) {
-      clearInterval(intervalRef.current);
+        if (timerStartRef.current) {
+          const now = Date.now();
+          const elapsed = Math.floor((now - timerStartRef.current) / 1000);
+          setMatchTime(accumulatedTimeRef.current + elapsed);
+        }
+      }, 250); // Update more frequently for smoother display
+    } else {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+      // When stopping, save accumulated time
+      if (timerStartRef.current) {
+        const now = Date.now();
+        const elapsed = Math.floor((now - timerStartRef.current) / 1000);
+        accumulatedTimeRef.current = accumulatedTimeRef.current + elapsed;
+        timerStartRef.current = null;
+      }
     }
 
     return () => {
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
+        intervalRef.current = null;
       }
     };
   }, [isRunning]);
@@ -182,10 +218,12 @@ export default function LiveMatchScreen() {
         halfTimeTriggered: isSecondHalf,
         firstHalfAddedTime,
         secondHalfAddedTime,
+        timerStartTimestamp: isRunning && timerStartRef.current ? timerStartRef.current : undefined,
+        accumulatedTime: accumulatedTimeRef.current,
       };
       saveMatch(updatedMatch);
     }
-  }, [matchTime, match, isHalfTime, isSecondHalf, firstHalfAddedTime, secondHalfAddedTime]);
+  }, [matchTime, match, isHalfTime, isSecondHalf, firstHalfAddedTime, secondHalfAddedTime, isRunning]);
 
   const plannedDuration = (match?.plannedDuration || 60) * 60;
   const halfDuration = plannedDuration / 2;
@@ -233,12 +271,31 @@ export default function LiveMatchScreen() {
       setIsSecondHalf(true);
       setFirstHalfAddedTime(matchTime > halfDuration ? matchTime - halfDuration : 0);
     }
-    setIsRunning((prev) => !prev);
+    setIsRunning((prev) => {
+      if (!prev) {
+        // Starting the timer - set the start timestamp
+        timerStartRef.current = Date.now();
+      } else {
+        // Stopping the timer - accumulate the elapsed time
+        if (timerStartRef.current) {
+          const elapsed = Math.floor((Date.now() - timerStartRef.current) / 1000);
+          accumulatedTimeRef.current = accumulatedTimeRef.current + elapsed;
+          timerStartRef.current = null;
+        }
+      }
+      return !prev;
+    });
   }, [isHalfTime, matchTime, halfDuration]);
 
   const handleHalfTime = useCallback(() => {
     if (!isSecondHalf) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      // Stop the timer and save accumulated time
+      if (timerStartRef.current) {
+        const elapsed = Math.floor((Date.now() - timerStartRef.current) / 1000);
+        accumulatedTimeRef.current = accumulatedTimeRef.current + elapsed;
+        timerStartRef.current = null;
+      }
       setIsRunning(false);
       setIsHalfTime(true);
       if (matchTime > halfDuration) {
@@ -250,6 +307,12 @@ export default function LiveMatchScreen() {
   const handlePauseLongPress = useCallback(() => {
     if (isRunning) {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+      // Stop the timer and save accumulated time
+      if (timerStartRef.current) {
+        const elapsed = Math.floor((Date.now() - timerStartRef.current) / 1000);
+        accumulatedTimeRef.current = accumulatedTimeRef.current + elapsed;
+        timerStartRef.current = null;
+      }
       setIsRunning(false);
     }
   }, [isRunning]);
