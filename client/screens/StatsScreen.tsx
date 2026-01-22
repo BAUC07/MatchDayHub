@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from "react";
+import React, { useState, useCallback, useMemo, useRef } from "react";
 import {
   View,
   ScrollView,
@@ -8,6 +8,7 @@ import {
   Platform,
   Alert,
   Modal,
+  TextInput,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
@@ -49,6 +50,13 @@ const formatDateDisplay = (date: Date): string => {
   });
 };
 
+const formatDateForInput = (date: Date): string => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
 interface PlayerStat {
   playerId: string;
   playerName: string;
@@ -84,6 +92,9 @@ export default function StatsScreen() {
   const [endDate, setEndDate] = useState<Date>(new Date);
   const [showStartPicker, setShowStartPicker] = useState(false);
   const [showEndPicker, setShowEndPicker] = useState(false);
+  
+  const startInputRef = useRef<HTMLInputElement | null>(null);
+  const endInputRef = useRef<HTMLInputElement | null>(null);
 
   const loadData = useCallback(async () => {
     try {
@@ -156,128 +167,198 @@ export default function StatsScreen() {
     }
   }, []);
 
-  const renderDateFilters = useCallback(() => (
-    <View style={styles.dateFilterContainer}>
-      <ThemedText type="small" style={styles.dateFilterLabel}>
-        Date Range
-      </ThemedText>
-      <View style={styles.dateButtonsRow}>
-        <Pressable
-          style={({ pressed }) => [
-            styles.dateButton,
-            { opacity: pressed ? 0.7 : 1 },
-          ]}
-          onPress={() => {
-            Haptics.selectionAsync();
-            setShowStartPicker(true);
-          }}
-        >
-          <Feather name="calendar" size={14} color={AppColors.pitchGreen} />
-          <ThemedText type="small" style={styles.dateButtonText}>
-            {formatDateDisplay(startDate)}
+  const handleWebStartDateChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const dateValue = e.target.value;
+    if (dateValue) {
+      const newDate = new Date(dateValue + "T00:00:00");
+      Haptics.selectionAsync();
+      setStartDate(newDate);
+    }
+  }, []);
+
+  const handleWebEndDateChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const dateValue = e.target.value;
+    if (dateValue) {
+      const newDate = new Date(dateValue + "T00:00:00");
+      Haptics.selectionAsync();
+      setEndDate(newDate);
+    }
+  }, []);
+
+  const renderDateFilters = useCallback(() => {
+    if (Platform.OS === "web") {
+      return (
+        <View style={styles.dateFilterContainer}>
+          <ThemedText type="small" style={styles.dateFilterLabel}>
+            Date Range
           </ThemedText>
-        </Pressable>
-        <ThemedText type="small" style={styles.dateSeparator}>to</ThemedText>
-        <Pressable
-          style={({ pressed }) => [
-            styles.dateButton,
-            { opacity: pressed ? 0.7 : 1 },
-          ]}
-          onPress={() => {
-            Haptics.selectionAsync();
-            setShowEndPicker(true);
-          }}
-        >
-          <Feather name="calendar" size={14} color={AppColors.pitchGreen} />
-          <ThemedText type="small" style={styles.dateButtonText}>
-            {formatDateDisplay(endDate)}
-          </ThemedText>
-        </Pressable>
+          <View style={styles.dateButtonsRow}>
+            <View style={styles.dateButton}>
+              <Feather name="calendar" size={14} color={AppColors.pitchGreen} />
+              <input
+                type="date"
+                value={formatDateForInput(startDate)}
+                max={formatDateForInput(endDate)}
+                onChange={handleWebStartDateChange as any}
+                style={{
+                  backgroundColor: "transparent",
+                  border: "none",
+                  color: "#FFFFFF",
+                  fontSize: 14,
+                  fontFamily: "inherit",
+                  cursor: "pointer",
+                  outline: "none",
+                }}
+              />
+            </View>
+            <ThemedText type="small" style={styles.dateSeparator}>to</ThemedText>
+            <View style={styles.dateButton}>
+              <Feather name="calendar" size={14} color={AppColors.pitchGreen} />
+              <input
+                type="date"
+                value={formatDateForInput(endDate)}
+                min={formatDateForInput(startDate)}
+                max={formatDateForInput(new Date())}
+                onChange={handleWebEndDateChange as any}
+                style={{
+                  backgroundColor: "transparent",
+                  border: "none",
+                  color: "#FFFFFF",
+                  fontSize: 14,
+                  fontFamily: "inherit",
+                  cursor: "pointer",
+                  outline: "none",
+                }}
+              />
+            </View>
+          </View>
+        </View>
+      );
+    }
+    
+    return (
+      <View style={styles.dateFilterContainer}>
+        <ThemedText type="small" style={styles.dateFilterLabel}>
+          Date Range
+        </ThemedText>
+        <View style={styles.dateButtonsRow}>
+          <Pressable
+            style={({ pressed }) => [
+              styles.dateButton,
+              { opacity: pressed ? 0.7 : 1 },
+            ]}
+            onPress={() => {
+              Haptics.selectionAsync();
+              setShowStartPicker(true);
+            }}
+          >
+            <Feather name="calendar" size={14} color={AppColors.pitchGreen} />
+            <ThemedText type="small" style={styles.dateButtonText}>
+              {formatDateDisplay(startDate)}
+            </ThemedText>
+          </Pressable>
+          <ThemedText type="small" style={styles.dateSeparator}>to</ThemedText>
+          <Pressable
+            style={({ pressed }) => [
+              styles.dateButton,
+              { opacity: pressed ? 0.7 : 1 },
+            ]}
+            onPress={() => {
+              Haptics.selectionAsync();
+              setShowEndPicker(true);
+            }}
+          >
+            <Feather name="calendar" size={14} color={AppColors.pitchGreen} />
+            <ThemedText type="small" style={styles.dateButtonText}>
+              {formatDateDisplay(endDate)}
+            </ThemedText>
+          </Pressable>
+        </View>
+        
+        {showStartPicker ? (
+          Platform.OS === "ios" ? (
+            <Modal transparent animationType="fade" visible={showStartPicker}>
+              <Pressable
+                style={styles.datePickerOverlay}
+                onPress={() => setShowStartPicker(false)}
+              >
+                <View style={styles.datePickerModal}>
+                  <View style={styles.datePickerHeader}>
+                    <ThemedText type="body" style={styles.datePickerTitle}>
+                      Start Date
+                    </ThemedText>
+                    <Pressable onPress={() => setShowStartPicker(false)}>
+                      <ThemedText type="body" style={styles.datePickerDone}>
+                        Done
+                      </ThemedText>
+                    </Pressable>
+                  </View>
+                  <DateTimePicker
+                    value={startDate}
+                    mode="date"
+                    display="spinner"
+                    onChange={handleStartDateChange}
+                    maximumDate={endDate}
+                    themeVariant="dark"
+                  />
+                </View>
+              </Pressable>
+            </Modal>
+          ) : (
+            <DateTimePicker
+              value={startDate}
+              mode="date"
+              display="default"
+              onChange={handleStartDateChange}
+              maximumDate={endDate}
+            />
+          )
+        ) : null}
+        
+        {showEndPicker ? (
+          Platform.OS === "ios" ? (
+            <Modal transparent animationType="fade" visible={showEndPicker}>
+              <Pressable
+                style={styles.datePickerOverlay}
+                onPress={() => setShowEndPicker(false)}
+              >
+                <View style={styles.datePickerModal}>
+                  <View style={styles.datePickerHeader}>
+                    <ThemedText type="body" style={styles.datePickerTitle}>
+                      End Date
+                    </ThemedText>
+                    <Pressable onPress={() => setShowEndPicker(false)}>
+                      <ThemedText type="body" style={styles.datePickerDone}>
+                        Done
+                      </ThemedText>
+                    </Pressable>
+                  </View>
+                  <DateTimePicker
+                    value={endDate}
+                    mode="date"
+                    display="spinner"
+                    onChange={handleEndDateChange}
+                    minimumDate={startDate}
+                    maximumDate={new Date()}
+                    themeVariant="dark"
+                  />
+                </View>
+              </Pressable>
+            </Modal>
+          ) : (
+            <DateTimePicker
+              value={endDate}
+              mode="date"
+              display="default"
+              onChange={handleEndDateChange}
+              minimumDate={startDate}
+              maximumDate={new Date()}
+            />
+          )
+        ) : null}
       </View>
-      
-      {showStartPicker ? (
-        Platform.OS === "ios" ? (
-          <Modal transparent animationType="fade" visible={showStartPicker}>
-            <Pressable
-              style={styles.datePickerOverlay}
-              onPress={() => setShowStartPicker(false)}
-            >
-              <View style={styles.datePickerModal}>
-                <View style={styles.datePickerHeader}>
-                  <ThemedText type="body" style={styles.datePickerTitle}>
-                    Start Date
-                  </ThemedText>
-                  <Pressable onPress={() => setShowStartPicker(false)}>
-                    <ThemedText type="body" style={styles.datePickerDone}>
-                      Done
-                    </ThemedText>
-                  </Pressable>
-                </View>
-                <DateTimePicker
-                  value={startDate}
-                  mode="date"
-                  display="spinner"
-                  onChange={handleStartDateChange}
-                  maximumDate={endDate}
-                  themeVariant="dark"
-                />
-              </View>
-            </Pressable>
-          </Modal>
-        ) : (
-          <DateTimePicker
-            value={startDate}
-            mode="date"
-            display="default"
-            onChange={handleStartDateChange}
-            maximumDate={endDate}
-          />
-        )
-      ) : null}
-      
-      {showEndPicker ? (
-        Platform.OS === "ios" ? (
-          <Modal transparent animationType="fade" visible={showEndPicker}>
-            <Pressable
-              style={styles.datePickerOverlay}
-              onPress={() => setShowEndPicker(false)}
-            >
-              <View style={styles.datePickerModal}>
-                <View style={styles.datePickerHeader}>
-                  <ThemedText type="body" style={styles.datePickerTitle}>
-                    End Date
-                  </ThemedText>
-                  <Pressable onPress={() => setShowEndPicker(false)}>
-                    <ThemedText type="body" style={styles.datePickerDone}>
-                      Done
-                    </ThemedText>
-                  </Pressable>
-                </View>
-                <DateTimePicker
-                  value={endDate}
-                  mode="date"
-                  display="spinner"
-                  onChange={handleEndDateChange}
-                  minimumDate={startDate}
-                  maximumDate={new Date()}
-                  themeVariant="dark"
-                />
-              </View>
-            </Pressable>
-          </Modal>
-        ) : (
-          <DateTimePicker
-            value={endDate}
-            mode="date"
-            display="default"
-            onChange={handleEndDateChange}
-            minimumDate={startDate}
-            maximumDate={new Date()}
-          />
-        )
-      ) : null}
-    </View>
-  ), [startDate, endDate, showStartPicker, showEndPicker, handleStartDateChange, handleEndDateChange]);
+    );
+  }, [startDate, endDate, showStartPicker, showEndPicker, handleStartDateChange, handleEndDateChange, handleWebStartDateChange, handleWebEndDateChange]);
 
   const getPlayerName = (playerId: string): string => {
     for (const team of teams) {
