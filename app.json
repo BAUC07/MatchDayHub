@@ -50,7 +50,10 @@
       "reactCompiler": true
     },
     "extra": {
-      "eas": {}
-    }
+      "eas": {
+        "projectId": "b2a812e0-59ff-47c8-a72d-0836fadeafe0"
+      }
+    },
+    "owner": "442apps"
   }
 }
