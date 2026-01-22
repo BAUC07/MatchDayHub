@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useMemo } from "react";
 import {
   View,
   ScrollView,
@@ -7,6 +7,7 @@ import {
   Dimensions,
   Platform,
   Alert,
+  Modal,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
@@ -14,6 +15,7 @@ import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 import { useFocusEffect } from "@react-navigation/native";
 import { Feather } from "@expo/vector-icons";
 import Svg, { Path, Circle, G, Text as SvgText } from "react-native-svg";
+import DateTimePicker from "@react-native-community/datetimepicker";
 import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
 import * as Haptics from "expo-haptics";
@@ -26,6 +28,26 @@ import { Match, MatchEvent, Team, Player, SubscriptionState } from "@/types";
 import { getMatches, getTeams, getSubscription, saveSubscription } from "@/lib/storage";
 
 type FilterType = "all" | "home" | "away";
+
+const getDefaultSeasonStartDate = (): Date => {
+  const now = new Date();
+  const currentMonth = now.getMonth();
+  const currentYear = now.getFullYear();
+  
+  if (currentMonth >= 7) {
+    return new Date(currentYear, 7, 1);
+  } else {
+    return new Date(currentYear - 1, 7, 1);
+  }
+};
+
+const formatDateDisplay = (date: Date): string => {
+  return date.toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+};
 
 interface PlayerStat {
   playerId: string;
@@ -57,6 +79,11 @@ export default function StatsScreen() {
   const [filter, setFilter] = useState<FilterType>("all");
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  
+  const [startDate, setStartDate] = useState<Date>(getDefaultSeasonStartDate);
+  const [endDate, setEndDate] = useState<Date>(new Date);
+  const [showStartPicker, setShowStartPicker] = useState(false);
+  const [showEndPicker, setShowEndPicker] = useState(false);
 
   const loadData = useCallback(async () => {
     try {
@@ -96,11 +123,161 @@ export default function StatsScreen() {
 
   const selectedTeam = teams.find((t) => t.id === selectedTeamId) || null;
   
-  const filteredMatches = matches.filter((m) => {
-    if (selectedTeamId && m.teamId !== selectedTeamId) return false;
-    if (filter === "all") return true;
-    return m.location === filter;
-  });
+  const filteredMatches = useMemo(() => {
+    return matches.filter((m) => {
+      if (selectedTeamId && m.teamId !== selectedTeamId) return false;
+      if (filter !== "all" && m.location !== filter) return false;
+      
+      const matchDate = new Date(m.date);
+      const startOfDay = new Date(startDate);
+      startOfDay.setHours(0, 0, 0, 0);
+      const endOfDay = new Date(endDate);
+      endOfDay.setHours(23, 59, 59, 999);
+      
+      if (matchDate < startOfDay || matchDate > endOfDay) return false;
+      
+      return true;
+    });
+  }, [matches, selectedTeamId, filter, startDate, endDate]);
+  
+  const handleStartDateChange = useCallback((event: any, date?: Date) => {
+    setShowStartPicker(Platform.OS === "ios");
+    if (date) {
+      Haptics.selectionAsync();
+      setStartDate(date);
+    }
+  }, []);
+  
+  const handleEndDateChange = useCallback((event: any, date?: Date) => {
+    setShowEndPicker(Platform.OS === "ios");
+    if (date) {
+      Haptics.selectionAsync();
+      setEndDate(date);
+    }
+  }, []);
+
+  const renderDateFilters = useCallback(() => (
+    <View style={styles.dateFilterContainer}>
+      <ThemedText type="small" style={styles.dateFilterLabel}>
+        Date Range
+      </ThemedText>
+      <View style={styles.dateButtonsRow}>
+        <Pressable
+          style={({ pressed }) => [
+            styles.dateButton,
+            { opacity: pressed ? 0.7 : 1 },
+          ]}
+          onPress={() => {
+            Haptics.selectionAsync();
+            setShowStartPicker(true);
+          }}
+        >
+          <Feather name="calendar" size={14} color={AppColors.pitchGreen} />
+          <ThemedText type="small" style={styles.dateButtonText}>
+            {formatDateDisplay(startDate)}
+          </ThemedText>
+        </Pressable>
+        <ThemedText type="small" style={styles.dateSeparator}>to</ThemedText>
+        <Pressable
+          style={({ pressed }) => [
+            styles.dateButton,
+            { opacity: pressed ? 0.7 : 1 },
+          ]}
+          onPress={() => {
+            Haptics.selectionAsync();
+            setShowEndPicker(true);
+          }}
+        >
+          <Feather name="calendar" size={14} color={AppColors.pitchGreen} />
+          <ThemedText type="small" style={styles.dateButtonText}>
+            {formatDateDisplay(endDate)}
+          </ThemedText>
+        </Pressable>
+      </View>
+      
+      {showStartPicker ? (
+        Platform.OS === "ios" ? (
+          <Modal transparent animationType="fade" visible={showStartPicker}>
+            <Pressable
+              style={styles.datePickerOverlay}
+              onPress={() => setShowStartPicker(false)}
+            >
+              <View style={styles.datePickerModal}>
+                <View style={styles.datePickerHeader}>
+                  <ThemedText type="body" style={styles.datePickerTitle}>
+                    Start Date
+                  </ThemedText>
+                  <Pressable onPress={() => setShowStartPicker(false)}>
+                    <ThemedText type="body" style={styles.datePickerDone}>
+                      Done
+                    </ThemedText>
+                  </Pressable>
+                </View>
+                <DateTimePicker
+                  value={startDate}
+                  mode="date"
+                  display="spinner"
+                  onChange={handleStartDateChange}
+                  maximumDate={endDate}
+                  themeVariant="dark"
+                />
+              </View>
+            </Pressable>
+          </Modal>
+        ) : (
+          <DateTimePicker
+            value={startDate}
+            mode="date"
+            display="default"
+            onChange={handleStartDateChange}
+            maximumDate={endDate}
+          />
+        )
+      ) : null}
+      
+      {showEndPicker ? (
+        Platform.OS === "ios" ? (
+          <Modal transparent animationType="fade" visible={showEndPicker}>
+            <Pressable
+              style={styles.datePickerOverlay}
+              onPress={() => setShowEndPicker(false)}
+            >
+              <View style={styles.datePickerModal}>
+                <View style={styles.datePickerHeader}>
+                  <ThemedText type="body" style={styles.datePickerTitle}>
+                    End Date
+                  </ThemedText>
+                  <Pressable onPress={() => setShowEndPicker(false)}>
+                    <ThemedText type="body" style={styles.datePickerDone}>
+                      Done
+                    </ThemedText>
+                  </Pressable>
+                </View>
+                <DateTimePicker
+                  value={endDate}
+                  mode="date"
+                  display="spinner"
+                  onChange={handleEndDateChange}
+                  minimumDate={startDate}
+                  maximumDate={new Date()}
+                  themeVariant="dark"
+                />
+              </View>
+            </Pressable>
+          </Modal>
+        ) : (
+          <DateTimePicker
+            value={endDate}
+            mode="date"
+            display="default"
+            onChange={handleEndDateChange}
+            minimumDate={startDate}
+            maximumDate={new Date()}
+          />
+        )
+      ) : null}
+    </View>
+  ), [startDate, endDate, showStartPicker, showEndPicker, handleStartDateChange, handleEndDateChange]);
 
   const getPlayerName = (playerId: string): string => {
     for (const team of teams) {
@@ -876,6 +1053,8 @@ export default function StatsScreen() {
           </View>
         ) : null}
 
+        {renderDateFilters()}
+        
         {renderFilterButtons()}
 
         <ThemedText type="small" style={styles.matchCount}>
@@ -1049,5 +1228,60 @@ const styles = StyleSheet.create({
     color: AppColors.textSecondary, 
     textAlign: "center", 
     marginTop: Spacing.xs 
+  },
+  dateFilterContainer: {
+    marginBottom: Spacing.md,
+    paddingHorizontal: Spacing.md,
+  },
+  dateFilterLabel: {
+    color: AppColors.textSecondary,
+    marginBottom: Spacing.sm,
+  },
+  dateButtonsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  dateButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: AppColors.surface,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    borderRadius: BorderRadius.sm,
+    gap: Spacing.xs,
+  },
+  dateButtonText: {
+    color: "#FFFFFF",
+  },
+  dateSeparator: {
+    color: AppColors.textSecondary,
+    marginHorizontal: Spacing.sm,
+  },
+  datePickerOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    justifyContent: "flex-end",
+  },
+  datePickerModal: {
+    backgroundColor: AppColors.surface,
+    borderTopLeftRadius: BorderRadius.md,
+    borderTopRightRadius: BorderRadius.md,
+    paddingBottom: Spacing.xl,
+  },
+  datePickerHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: Spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: AppColors.elevated,
+  },
+  datePickerTitle: {
+    color: "#FFFFFF",
+    fontWeight: "600",
+  },
+  datePickerDone: {
+    color: AppColors.pitchGreen,
+    fontWeight: "600",
   },
 });
