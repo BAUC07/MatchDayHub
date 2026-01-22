@@ -7,6 +7,7 @@ import MatchSetupScreen from "@/screens/MatchSetupScreen";
 import LiveMatchScreen from "@/screens/LiveMatchScreen";
 import MatchSummaryScreen from "@/screens/MatchSummaryScreen";
 import CreateTeamScreen from "@/screens/CreateTeamScreen";
+import PaywallScreen from "@/screens/PaywallScreen";
 import { useScreenOptions } from "@/hooks/useScreenOptions";
 import { Team, Match } from "@/types";
 
@@ -18,6 +19,7 @@ export type RootStackParamList = {
   MatchSetup: { teamId: string };
   LiveMatch: { matchId: string };
   MatchSummary: { matchId: string };
+  Paywall: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -70,6 +72,14 @@ export default function RootStackNavigator() {
         options={{
           headerTitle: "Match Summary",
           gestureEnabled: false,
+        }}
+      />
+      <Stack.Screen
+        name="Paywall"
+        component={PaywallScreen}
+        options={{
+          presentation: "modal",
+          headerShown: false,
         }}
       />
     </Stack.Navigator>
