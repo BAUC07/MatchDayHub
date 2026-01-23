@@ -310,7 +310,19 @@ export default function LiveMatchScreen() {
   }, [isHalfTime, matchTime, halfDuration]);
 
   const handleHalfTime = useCallback(() => {
-    if (!isSecondHalf) {
+    if (isHalfTime) {
+      // During half time, clicking HT starts the second half
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setIsHalfTime(false);
+      setIsSecondHalf(true);
+      if (matchTime > halfDuration) {
+        setFirstHalfAddedTime(matchTime - halfDuration);
+      }
+      // Start the timer for second half
+      timerStartRef.current = Date.now();
+      setIsRunning(true);
+    } else if (!isSecondHalf) {
+      // During first half, trigger half time break
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       // Stop the timer and save accumulated time
       if (timerStartRef.current) {
@@ -324,7 +336,7 @@ export default function LiveMatchScreen() {
         setFirstHalfAddedTime(matchTime - halfDuration);
       }
     }
-  }, [isSecondHalf, matchTime, halfDuration]);
+  }, [isHalfTime, isSecondHalf, matchTime, halfDuration]);
 
   const handlePauseLongPress = useCallback(() => {
     if (isRunning) {
@@ -849,7 +861,7 @@ export default function LiveMatchScreen() {
             onPress={isSecondHalf ? handleEndMatch : handleHalfTime}
           >
             <ThemedText type="body" style={styles.actionButtonText}>
-              {isSecondHalf ? "END" : "HT"}
+              {isSecondHalf ? "END" : isHalfTime ? "2nd" : "HT"}
             </ThemedText>
           </Pressable>
         </View>
