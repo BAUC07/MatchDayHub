@@ -173,33 +173,30 @@ export default function LiveMatchScreen() {
     loadData();
   }, [loadData]);
 
-  // Timer effect using requestAnimationFrame for reliable visual updates
+  // Timer effect using setInterval for reliable updates every second
   useEffect(() => {
-    let animationFrameId: number | null = null;
-    let lastUpdateTime = 0;
-    
-    const updateTimer = () => {
-      if (timerStartRef.current) {
-        const now = Date.now();
-        // Only update state once per second to avoid excessive re-renders
-        if (now - lastUpdateTime >= 1000) {
-          lastUpdateTime = now;
-          const elapsed = Math.floor((now - timerStartRef.current) / 1000);
-          setMatchTime(accumulatedTimeRef.current + elapsed);
-        }
-      }
-      if (isRunning) {
-        animationFrameId = requestAnimationFrame(updateTimer);
-      }
-    };
+    let intervalId: ReturnType<typeof setInterval> | null = null;
     
     if (isRunning) {
-      // Use timestamp-based timing for accurate time on iOS
+      // Use timestamp-based timing for accurate time calculation
       if (!timerStartRef.current) {
         timerStartRef.current = Date.now();
       }
-      // Start the animation loop
-      animationFrameId = requestAnimationFrame(updateTimer);
+      
+      // Update immediately on start
+      const updateTime = () => {
+        if (timerStartRef.current) {
+          const now = Date.now();
+          const elapsed = Math.floor((now - timerStartRef.current) / 1000);
+          setMatchTime(accumulatedTimeRef.current + elapsed);
+        }
+      };
+      
+      // Initial update
+      updateTime();
+      
+      // Then update every second
+      intervalId = setInterval(updateTime, 1000);
     } else {
       // When stopping, save accumulated time
       if (timerStartRef.current) {
@@ -211,8 +208,8 @@ export default function LiveMatchScreen() {
     }
 
     return () => {
-      if (animationFrameId) {
-        cancelAnimationFrame(animationFrameId);
+      if (intervalId) {
+        clearInterval(intervalId);
       }
     };
   }, [isRunning]);

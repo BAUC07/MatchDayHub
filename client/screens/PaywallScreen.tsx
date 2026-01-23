@@ -20,7 +20,6 @@ const FEATURES = [
   { icon: 'users', title: 'Unlimited Teams', description: 'Manage all your teams in one place' },
   { icon: 'file-text', title: 'PDF Reports', description: 'Export and share season statistics' },
   { icon: 'calendar', title: 'Season Filtering', description: 'Filter stats by date range' },
-  { icon: 'award', title: 'Priority Support', description: 'Get help when you need it' },
 ];
 
 export default function PaywallScreen() {
@@ -272,6 +271,7 @@ const styles = StyleSheet.create({
   },
   featureText: {
     flex: 1,
+    flexShrink: 1,
   },
   featureTitle: {
     fontSize: 16,
@@ -279,6 +279,7 @@ const styles = StyleSheet.create({
   },
   featureDescription: {
     fontSize: 14,
+    flexWrap: 'wrap',
   },
   packagesSection: {
     gap: Spacing.md,
