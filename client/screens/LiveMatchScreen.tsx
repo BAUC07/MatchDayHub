@@ -17,7 +17,7 @@ import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
-import { Gesture, GestureDetector, GestureHandlerRootView } from "react-native-gesture-handler";
+import { Gesture, GestureDetector, GestureHandlerRootView, Swipeable } from "react-native-gesture-handler";
 import Animated, { useSharedValue, useAnimatedStyle, withSpring, runOnJS } from "react-native-reanimated";
 
 import { ThemedText } from "@/components/ThemedText";
@@ -486,6 +486,43 @@ export default function LiveMatchScreen() {
     [addEvent]
   );
 
+  const handleDeleteMatchEvent = useCallback((eventId: string) => {
+    if (!match) return;
+    
+    const eventToDelete = match.events.find(e => e.id === eventId);
+    if (!eventToDelete) return;
+
+    let newScoreFor = match.scoreFor;
+    let newScoreAgainst = match.scoreAgainst;
+
+    if (eventToDelete.type === "goal_for") {
+      newScoreFor = Math.max(0, newScoreFor - 1);
+    } else if (eventToDelete.type === "goal_against") {
+      newScoreAgainst = Math.max(0, newScoreAgainst - 1);
+    } else if (eventToDelete.type === "penalty") {
+      if (eventToDelete.penaltyOutcome === "scored") {
+        if (eventToDelete.isForTeam) {
+          newScoreFor = Math.max(0, newScoreFor - 1);
+        } else {
+          newScoreAgainst = Math.max(0, newScoreAgainst - 1);
+        }
+      }
+    }
+
+    const updatedEvents = match.events.filter(e => e.id !== eventId);
+    
+    const updatedMatch: Match = {
+      ...match,
+      events: updatedEvents,
+      scoreFor: newScoreFor,
+      scoreAgainst: newScoreAgainst,
+    };
+
+    setMatch(updatedMatch);
+    saveMatch(updatedMatch);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  }, [match]);
+
   const handleEndMatch = useCallback(() => {
     if (!match || !team) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -886,6 +923,7 @@ export default function LiveMatchScreen() {
         events={match.events}
         players={team.players}
         onClose={() => setShowTimeline(false)}
+        onDeleteEvent={handleDeleteMatchEvent}
       />
 
       <Modal visible={showEndConfirm} transparent animationType="fade" onRequestClose={() => setShowEndConfirm(false)}>
@@ -1203,9 +1241,10 @@ interface TimelineSheetProps {
   events: MatchEvent[];
   players: Player[];
   onClose: () => void;
+  onDeleteEvent?: (eventId: string) => void;
 }
 
-function TimelineSheet({ visible, events, players, onClose }: TimelineSheetProps) {
+function TimelineSheet({ visible, events, players, onClose, onDeleteEvent }: TimelineSheetProps) {
   const insets = useSafeAreaInsets();
   const [hideSubs, setHideSubs] = useState(false);
 
@@ -1215,6 +1254,11 @@ function TimelineSheet({ visible, events, players, onClose }: TimelineSheetProps
     if (!id) return "";
     const player = players.find((p) => p.id === id);
     return player?.name || "Unknown";
+  };
+
+  const formatGoalType = (goalType?: GoalType) => {
+    if (!goalType) return "";
+    return goalType.replace("_", " ");
   };
 
   const getEventIcon = (event: MatchEvent) => {
@@ -1240,9 +1284,10 @@ function TimelineSheet({ visible, events, players, onClose }: TimelineSheetProps
     switch (event.type) {
       case "goal_for":
         const assistText = event.assistPlayerId ? ` (assist: ${getPlayerName(event.assistPlayerId)})` : "";
-        return `Goal: ${getPlayerName(event.playerId)}${assistText}`;
+        const goalTypeText = event.goalType ? ` - ${formatGoalType(event.goalType)}` : "";
+        return `Goal: ${getPlayerName(event.playerId)}${assistText}${goalTypeText}`;
       case "goal_against":
-        return `Goal conceded (${event.goalType?.replace("_", " ")})`;
+        return `Goal conceded (${formatGoalType(event.goalType)})`;
       case "card":
         return `${event.cardType === "yellow" ? "Yellow" : "Red"} card: ${getPlayerName(event.playerId)}`;
       case "substitution":
@@ -1253,6 +1298,22 @@ function TimelineSheet({ visible, events, players, onClose }: TimelineSheetProps
         return "";
     }
   };
+
+  const handleDeleteEvent = useCallback((eventId: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    onDeleteEvent?.(eventId);
+  }, [onDeleteEvent]);
+
+  const renderRightActions = useCallback((eventId: string) => {
+    return (
+      <Pressable
+        style={sheetStyles.deleteEventAction}
+        onPress={() => handleDeleteEvent(eventId)}
+      >
+        <Feather name="trash-2" size={18} color="#FFFFFF" />
+      </Pressable>
+    );
+  }, [handleDeleteEvent]);
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
@@ -1267,6 +1328,11 @@ function TimelineSheet({ visible, events, players, onClose }: TimelineSheetProps
           <Feather name={hideSubs ? "check-square" : "square"} size={18} color={AppColors.textSecondary} />
           <ThemedText type="small" style={{ color: AppColors.textSecondary }}>Hide substitutions</ThemedText>
         </Pressable>
+        {onDeleteEvent ? (
+          <ThemedText type="caption" style={{ color: AppColors.textSecondary, marginBottom: Spacing.sm }}>
+            Swipe left on an event to remove it
+          </ThemedText>
+        ) : null}
         {filteredEvents.length === 0 ? (
           <View style={sheetStyles.emptyTimeline}>
             <Feather name="clock" size={32} color={AppColors.textSecondary} />
@@ -1277,11 +1343,25 @@ function TimelineSheet({ visible, events, players, onClose }: TimelineSheetProps
             data={[...filteredEvents].reverse()}
             keyExtractor={(item) => item.id}
             renderItem={({ item }) => (
-              <View style={sheetStyles.timelineItem}>
-                <ThemedText type="small" style={sheetStyles.timelineTime}>{formatMatchTime(item.timestamp)}</ThemedText>
-                {getEventIcon(item)}
-                <ThemedText type="small" style={sheetStyles.timelineText}>{getEventText(item)}</ThemedText>
-              </View>
+              onDeleteEvent ? (
+                <Swipeable
+                  renderRightActions={() => renderRightActions(item.id)}
+                  overshootRight={false}
+                  friction={2}
+                >
+                  <View style={sheetStyles.timelineItem}>
+                    <ThemedText type="small" style={sheetStyles.timelineTime}>{formatMatchTime(item.timestamp)}</ThemedText>
+                    {getEventIcon(item)}
+                    <ThemedText type="small" style={sheetStyles.timelineText}>{getEventText(item)}</ThemedText>
+                  </View>
+                </Swipeable>
+              ) : (
+                <View style={sheetStyles.timelineItem}>
+                  <ThemedText type="small" style={sheetStyles.timelineTime}>{formatMatchTime(item.timestamp)}</ThemedText>
+                  {getEventIcon(item)}
+                  <ThemedText type="small" style={sheetStyles.timelineText}>{getEventText(item)}</ThemedText>
+                </View>
+              )
             )}
           />
         )}
@@ -1365,7 +1445,8 @@ const sheetStyles = StyleSheet.create({
   penaltyOptions: { gap: Spacing.md },
   penaltyButton: { flexDirection: "row", alignItems: "center", gap: Spacing.md, backgroundColor: AppColors.elevated, padding: Spacing.lg, borderRadius: BorderRadius.sm },
   emptyTimeline: { alignItems: "center", paddingVertical: Spacing["3xl"], gap: Spacing.md },
-  timelineItem: { flexDirection: "row", alignItems: "center", gap: Spacing.md, paddingVertical: Spacing.md, borderBottomWidth: 1, borderBottomColor: AppColors.elevated },
+  timelineItem: { flexDirection: "row", alignItems: "center", gap: Spacing.md, paddingVertical: Spacing.md, borderBottomWidth: 1, borderBottomColor: AppColors.elevated, backgroundColor: AppColors.surface },
+  deleteEventAction: { width: 60, height: "100%", backgroundColor: AppColors.redCard, justifyContent: "center", alignItems: "center" },
   timelineTime: { color: AppColors.textSecondary, width: 50 },
   timelineText: { flex: 1 },
   filterToggle: { flexDirection: "row", alignItems: "center", gap: Spacing.sm, paddingVertical: Spacing.sm, marginBottom: Spacing.sm },
