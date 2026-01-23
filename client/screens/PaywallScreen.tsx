@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, StyleSheet, Pressable, TextInput, Alert, Keyboard } from 'react-native';
+import { View, StyleSheet, Pressable, TextInput, Alert, Keyboard, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -30,10 +30,25 @@ export default function PaywallScreen() {
 
   const [code, setCode] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
+
+  const showAlert = (title: string, message: string, onOk?: () => void) => {
+    if (Platform.OS === 'web') {
+      if (onOk) {
+        onOk();
+      }
+    } else {
+      Alert.alert(title, message, onOk ? [{ text: 'OK', onPress: onOk }] : undefined);
+    }
+  };
 
   const handleSubmitCode = async () => {
+    setErrorMessage('');
+    setSuccessMessage('');
+    
     if (!code.trim()) {
-      Alert.alert('Enter Code', 'Please enter your unlock code.');
+      setErrorMessage('Please enter your unlock code.');
       return;
     }
 
@@ -45,15 +60,16 @@ export default function PaywallScreen() {
       const success = await unlockWithCode(code);
       if (success) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        Alert.alert('Welcome to Elite!', 'You now have access to all premium features.', [
-          { text: 'OK', onPress: () => navigation.goBack() }
-        ]);
+        setSuccessMessage('Welcome to Elite! You now have access to all premium features.');
+        setTimeout(() => {
+          navigation.goBack();
+        }, 1500);
       } else {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-        Alert.alert('Invalid Code', 'The code you entered is not valid. Please check and try again.');
+        setErrorMessage('Invalid code. Please check and try again.');
       }
     } catch (error) {
-      Alert.alert('Error', 'Something went wrong. Please try again.');
+      setErrorMessage('Something went wrong. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
@@ -111,7 +127,22 @@ export default function PaywallScreen() {
             returnKeyType="done"
             onSubmitEditing={handleSubmitCode}
             editable={!isSubmitting}
+            testID="code-input"
           />
+          
+          {errorMessage ? (
+            <View style={styles.messageContainer}>
+              <ThemedText style={styles.errorMessage}>{errorMessage}</ThemedText>
+            </View>
+          ) : null}
+          
+          {successMessage ? (
+            <View style={[styles.messageContainer, styles.successContainer]}>
+              <Feather name="check-circle" size={24} color={AppColors.pitchGreen} />
+              <ThemedText style={styles.successMessage}>{successMessage}</ThemedText>
+            </View>
+          ) : null}
+          
           <Pressable
             style={[
               styles.submitButton,
@@ -119,7 +150,8 @@ export default function PaywallScreen() {
               isSubmitting && styles.submitButtonDisabled,
             ]}
             onPress={handleSubmitCode}
-            disabled={isSubmitting}
+            disabled={isSubmitting || !!successMessage}
+            testID="unlock-button"
           >
             <ThemedText style={styles.submitButtonText}>
               {isSubmitting ? 'Checking...' : 'Unlock Elite'}
@@ -215,7 +247,29 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     textAlign: 'center',
     letterSpacing: 2,
-    marginBottom: Spacing.lg,
+    marginBottom: Spacing.md,
+  },
+  messageContainer: {
+    marginBottom: Spacing.md,
+    paddingHorizontal: Spacing.sm,
+  },
+  successContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    backgroundColor: AppColors.pitchGreen + '20',
+    padding: Spacing.md,
+    borderRadius: BorderRadius.md,
+  },
+  errorMessage: {
+    color: '#DC143C',
+    fontSize: 14,
+    textAlign: 'center',
+  },
+  successMessage: {
+    color: AppColors.pitchGreen,
+    fontSize: 14,
+    flex: 1,
   },
   submitButton: {
     height: 56,
