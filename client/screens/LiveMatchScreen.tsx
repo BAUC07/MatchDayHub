@@ -18,7 +18,7 @@ import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { Gesture, GestureDetector, GestureHandlerRootView, Swipeable } from "react-native-gesture-handler";
-import Animated, { useSharedValue, useAnimatedStyle, withSpring, runOnJS, useFrameCallback } from "react-native-reanimated";
+import Animated, { useSharedValue, useAnimatedStyle, withSpring, runOnJS } from "react-native-reanimated";
 
 import { ThemedText } from "@/components/ThemedText";
 import { useTheme } from "@/hooks/useTheme";
@@ -173,35 +173,37 @@ export default function LiveMatchScreen() {
     loadData();
   }, [loadData]);
 
-  // Track last displayed second to avoid unnecessary re-renders
-  const lastDisplayedSecondRef = useRef(-1);
-
-  // Frame callback that runs on UI thread every frame - most reliable timer on iOS
-  useFrameCallback(() => {
-    'worklet';
-    if (isRunning && timerStartRef.current) {
-      const now = Date.now();
-      const elapsed = Math.floor((now - timerStartRef.current) / 1000);
-      const newTime = accumulatedTimeRef.current + elapsed;
-      
-      // Only update state if the displayed second has changed
-      if (newTime !== lastDisplayedSecondRef.current) {
-        lastDisplayedSecondRef.current = newTime;
-        runOnJS(setMatchTime)(newTime);
-      }
-    }
-  }, isRunning);
-
-  // Handle timer start/stop
+  // Timer effect using setInterval - updates every second
   useEffect(() => {
     if (isRunning) {
-      // Start the timer - record start timestamp
+      // Record start timestamp if not already set
       if (!timerStartRef.current) {
         timerStartRef.current = Date.now();
       }
-      // Initial update
-      const elapsed = Math.floor((Date.now() - timerStartRef.current) / 1000);
-      setMatchTime(accumulatedTimeRef.current + elapsed);
+      
+      // Calculate and set initial time immediately
+      const calculateTime = () => {
+        if (timerStartRef.current) {
+          const now = Date.now();
+          const elapsed = Math.floor((now - timerStartRef.current) / 1000);
+          return accumulatedTimeRef.current + elapsed;
+        }
+        return accumulatedTimeRef.current;
+      };
+      
+      setMatchTime(calculateTime());
+      
+      // Set up interval that updates every 100ms for smoother updates
+      intervalRef.current = setInterval(() => {
+        setMatchTime(calculateTime());
+      }, 100);
+      
+      return () => {
+        if (intervalRef.current) {
+          clearInterval(intervalRef.current);
+          intervalRef.current = null;
+        }
+      };
     } else {
       // When stopping, save accumulated time
       if (timerStartRef.current) {
@@ -209,6 +211,11 @@ export default function LiveMatchScreen() {
         const elapsed = Math.floor((now - timerStartRef.current) / 1000);
         accumulatedTimeRef.current = accumulatedTimeRef.current + elapsed;
         timerStartRef.current = null;
+      }
+      // Clear any existing interval
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
       }
     }
   }, [isRunning]);
