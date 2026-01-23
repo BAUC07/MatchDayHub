@@ -18,7 +18,7 @@ import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { Gesture, GestureDetector, GestureHandlerRootView, Swipeable } from "react-native-gesture-handler";
-import Animated, { useSharedValue, useAnimatedStyle, withSpring, runOnJS } from "react-native-reanimated";
+import Animated, { useSharedValue, useAnimatedStyle, withSpring, runOnJS, useFrameCallback } from "react-native-reanimated";
 
 import { ThemedText } from "@/components/ThemedText";
 import { useTheme } from "@/hooks/useTheme";
@@ -173,38 +173,35 @@ export default function LiveMatchScreen() {
     loadData();
   }, [loadData]);
 
-  // Timer effect using frequent setInterval for reliable visual updates on iOS
+  // Track last displayed second to avoid unnecessary re-renders
+  const lastDisplayedSecondRef = useRef(-1);
+
+  // Frame callback that runs on UI thread every frame - most reliable timer on iOS
+  useFrameCallback(() => {
+    'worklet';
+    if (isRunning && timerStartRef.current) {
+      const now = Date.now();
+      const elapsed = Math.floor((now - timerStartRef.current) / 1000);
+      const newTime = accumulatedTimeRef.current + elapsed;
+      
+      // Only update state if the displayed second has changed
+      if (newTime !== lastDisplayedSecondRef.current) {
+        lastDisplayedSecondRef.current = newTime;
+        runOnJS(setMatchTime)(newTime);
+      }
+    }
+  }, isRunning);
+
+  // Handle timer start/stop
   useEffect(() => {
-    let intervalId: ReturnType<typeof setInterval> | null = null;
-    let lastDisplayedSecond = -1;
-    
     if (isRunning) {
-      // Use timestamp-based timing for accurate time calculation
+      // Start the timer - record start timestamp
       if (!timerStartRef.current) {
         timerStartRef.current = Date.now();
       }
-      
-      // Update function that only triggers re-render when second changes
-      const updateTime = () => {
-        if (timerStartRef.current) {
-          const now = Date.now();
-          const elapsed = Math.floor((now - timerStartRef.current) / 1000);
-          const newTime = accumulatedTimeRef.current + elapsed;
-          
-          // Only update state if the displayed second has changed
-          if (newTime !== lastDisplayedSecond) {
-            lastDisplayedSecond = newTime;
-            setMatchTime(newTime);
-          }
-        }
-      };
-      
       // Initial update
-      updateTime();
-      
-      // Use 250ms interval for more reliable updates on iOS
-      // The timestamp calculation ensures accuracy regardless of interval timing
-      intervalId = setInterval(updateTime, 250);
+      const elapsed = Math.floor((Date.now() - timerStartRef.current) / 1000);
+      setMatchTime(accumulatedTimeRef.current + elapsed);
     } else {
       // When stopping, save accumulated time
       if (timerStartRef.current) {
@@ -214,12 +211,6 @@ export default function LiveMatchScreen() {
         timerStartRef.current = null;
       }
     }
-
-    return () => {
-      if (intervalId) {
-        clearInterval(intervalId);
-      }
-    };
   }, [isRunning]);
 
   // AppState listener to recalculate time when app returns to foreground
