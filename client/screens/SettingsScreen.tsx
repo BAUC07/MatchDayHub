@@ -171,7 +171,7 @@ export default function SettingsScreen() {
         <View style={styles.aboutItem}>
           <ThemedText type="body">Version</ThemedText>
           <ThemedText type="body" style={{ color: AppColors.textSecondary }}>
-            1.0.0
+            1.0.6
           </ThemedText>
         </View>
         <View style={styles.divider} />
