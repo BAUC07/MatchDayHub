@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useRef } from "react";
 import {
   View,
   FlatList,
@@ -7,6 +7,7 @@ import {
   RefreshControl,
   Pressable,
   Modal,
+  Animated,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
@@ -15,13 +16,14 @@ import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
+import { Swipeable, GestureHandlerRootView } from "react-native-gesture-handler";
 
 import { ThemedText } from "@/components/ThemedText";
 import { Card } from "@/components/Card";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, AppColors, BorderRadius } from "@/constants/theme";
 import { Match, Team } from "@/types";
-import { getMatches, getTeams } from "@/lib/storage";
+import { getMatches, getTeams, deleteMatch } from "@/lib/storage";
 import { formatDate, getMatchResult } from "@/lib/utils";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 
@@ -39,6 +41,9 @@ export default function MatchesScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showTeamPicker, setShowTeamPicker] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [matchToDelete, setMatchToDelete] = useState<Match | null>(null);
+  const swipeableRefs = useRef<Map<string, Swipeable>>(new Map());
 
   const loadData = useCallback(async () => {
     try {
@@ -120,6 +125,61 @@ export default function MatchesScreen() {
     }
   };
 
+  const handleDeletePress = useCallback((match: Match) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setMatchToDelete(match);
+    setShowDeleteConfirm(true);
+  }, []);
+
+  const handleConfirmDelete = useCallback(async () => {
+    if (!matchToDelete) return;
+    
+    try {
+      await deleteMatch(matchToDelete.id);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setMatches((prev) => prev.filter((m) => m.id !== matchToDelete.id));
+    } catch (error) {
+      console.error("Error deleting match:", error);
+    } finally {
+      setShowDeleteConfirm(false);
+      setMatchToDelete(null);
+    }
+  }, [matchToDelete]);
+
+  const handleCancelDelete = useCallback(() => {
+    setShowDeleteConfirm(false);
+    setMatchToDelete(null);
+    if (matchToDelete) {
+      const swipeable = swipeableRefs.current.get(matchToDelete.id);
+      swipeable?.close();
+    }
+  }, [matchToDelete]);
+
+  const renderRightActions = useCallback(
+    (progress: Animated.AnimatedInterpolation<number>, dragX: Animated.AnimatedInterpolation<number>, match: Match) => {
+      const translateX = dragX.interpolate({
+        inputRange: [-80, 0],
+        outputRange: [0, 80],
+        extrapolate: "clamp",
+      });
+
+      return (
+        <Animated.View style={[styles.deleteAction, { transform: [{ translateX }] }]}>
+          <Pressable
+            style={styles.deleteButton}
+            onPress={() => handleDeletePress(match)}
+          >
+            <Feather name="trash-2" size={24} color="#FFFFFF" />
+            <ThemedText type="small" style={styles.deleteText}>
+              Delete
+            </ThemedText>
+          </Pressable>
+        </Animated.View>
+      );
+    },
+    [handleDeletePress]
+  );
+
   const renderNewMatchCard = useCallback(
     () => (
       <Pressable
@@ -164,65 +224,76 @@ export default function MatchesScreen() {
       const resultColor = getResultColor(result);
 
       return (
-        <Pressable
-          style={({ pressed }) => [
-            styles.matchCard,
-            { opacity: pressed ? 0.8 : 1 },
-          ]}
-          onPress={() => handleMatchPress(item)}
+        <Swipeable
+          ref={(ref) => {
+            if (ref) {
+              swipeableRefs.current.set(item.id, ref);
+            }
+          }}
+          renderRightActions={(progress, dragX) => renderRightActions(progress, dragX, item)}
+          overshootRight={false}
+          friction={2}
         >
-          <View
-            style={[
-              styles.locationBadge,
-              {
-                backgroundColor:
-                  item.location === "home"
-                    ? AppColors.pitchGreen
-                    : AppColors.elevated,
-              },
+          <Pressable
+            style={({ pressed }) => [
+              styles.matchCard,
+              { opacity: pressed ? 0.8 : 1 },
             ]}
+            onPress={() => handleMatchPress(item)}
           >
-            <ThemedText type="h4" style={{ color: "#FFFFFF", fontWeight: "700" }}>
-              {item.location === "home" ? "H" : "A"}
-            </ThemedText>
-          </View>
-
-          <View style={styles.scoreContainer}>
-            <View style={styles.teamScore}>
-              <ThemedText type="body" numberOfLines={1} style={styles.teamName}>
-                {getTeamName(item.teamId)}
-              </ThemedText>
-              <ThemedText type="h3" style={[styles.score, { color: resultColor }]}>
-                {item.scoreFor}
-              </ThemedText>
-            </View>
-            <ThemedText type="body" style={styles.vs}>
-              -
-            </ThemedText>
-            <View style={[styles.teamScore, styles.teamScoreRight]}>
-              <ThemedText type="body" numberOfLines={1} style={styles.teamName}>
-                {item.opposition}
-              </ThemedText>
-              <ThemedText type="h3" style={styles.score}>
-                {item.scoreAgainst}
+            <View
+              style={[
+                styles.locationBadge,
+                {
+                  backgroundColor:
+                    item.location === "home"
+                      ? AppColors.pitchGreen
+                      : AppColors.elevated,
+                },
+              ]}
+            >
+              <ThemedText type="h4" style={{ color: "#FFFFFF", fontWeight: "700" }}>
+                {item.location === "home" ? "H" : "A"}
               </ThemedText>
             </View>
-          </View>
 
-          <View style={styles.matchMeta}>
-            <ThemedText type="body" style={{ color: AppColors.textSecondary }}>
-              {item.format}
-            </ThemedText>
-            {!item.isCompleted ? (
-              <View style={styles.liveBadge}>
-                <View style={styles.liveIndicator} />
+            <View style={styles.scoreContainer}>
+              <View style={styles.teamScore}>
+                <ThemedText type="body" numberOfLines={1} style={styles.teamName}>
+                  {getTeamName(item.teamId)}
+                </ThemedText>
+                <ThemedText type="h3" style={[styles.score, { color: resultColor }]}>
+                  {item.scoreFor}
+                </ThemedText>
               </View>
-            ) : null}
-          </View>
-        </Pressable>
+              <ThemedText type="body" style={styles.vs}>
+                -
+              </ThemedText>
+              <View style={[styles.teamScore, styles.teamScoreRight]}>
+                <ThemedText type="body" numberOfLines={1} style={styles.teamName}>
+                  {item.opposition}
+                </ThemedText>
+                <ThemedText type="h3" style={styles.score}>
+                  {item.scoreAgainst}
+                </ThemedText>
+              </View>
+            </View>
+
+            <View style={styles.matchMeta}>
+              <ThemedText type="body" style={{ color: AppColors.textSecondary }}>
+                {item.format}
+              </ThemedText>
+              {!item.isCompleted ? (
+                <View style={styles.liveBadge}>
+                  <View style={styles.liveIndicator} />
+                </View>
+              ) : null}
+            </View>
+          </Pressable>
+        </Swipeable>
       );
     },
-    [getTeamName, handleMatchPress]
+    [getTeamName, handleMatchPress, renderRightActions]
   );
 
   const renderEmptyState = useCallback(
@@ -291,6 +362,52 @@ export default function MatchesScreen() {
         }
         ItemSeparatorComponent={() => <View style={styles.separator} />}
       />
+
+      <Modal
+        visible={showDeleteConfirm}
+        transparent
+        animationType="fade"
+        onRequestClose={handleCancelDelete}
+      >
+        <Pressable style={styles.deleteModalOverlay} onPress={handleCancelDelete}>
+          <View style={styles.deleteModalContent}>
+            <View style={styles.deleteModalIcon}>
+              <Feather name="trash-2" size={32} color={AppColors.redCard} />
+            </View>
+            <ThemedText type="h4" style={styles.deleteModalTitle}>
+              Delete Match?
+            </ThemedText>
+            {matchToDelete ? (
+              <ThemedText type="body" style={styles.deleteModalText}>
+                {getTeamName(matchToDelete.teamId)} vs {matchToDelete.opposition}
+                {"\n"}
+                {matchToDelete.scoreFor} - {matchToDelete.scoreAgainst}
+              </ThemedText>
+            ) : null}
+            <ThemedText type="small" style={styles.deleteModalWarning}>
+              This action cannot be undone.
+            </ThemedText>
+            <View style={styles.deleteModalButtons}>
+              <Pressable
+                style={[styles.deleteModalButton, styles.cancelButton]}
+                onPress={handleCancelDelete}
+              >
+                <ThemedText type="body" style={{ color: theme.text }}>
+                  Cancel
+                </ThemedText>
+              </Pressable>
+              <Pressable
+                style={[styles.deleteModalButton, styles.confirmDeleteButton]}
+                onPress={handleConfirmDelete}
+              >
+                <ThemedText type="body" style={{ color: "#FFFFFF", fontWeight: "600" }}>
+                  Delete
+                </ThemedText>
+              </Pressable>
+            </View>
+          </View>
+        </Pressable>
+      </Modal>
 
       <Modal
         visible={showTeamPicker}
@@ -496,5 +613,80 @@ const styles = StyleSheet.create({
   teamSeparator: {
     height: 1,
     backgroundColor: AppColors.elevated,
+  },
+  deleteAction: {
+    width: 80,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  deleteButton: {
+    width: 80,
+    height: "100%",
+    backgroundColor: AppColors.redCard,
+    justifyContent: "center",
+    alignItems: "center",
+    borderTopRightRadius: BorderRadius.md,
+    borderBottomRightRadius: BorderRadius.md,
+  },
+  deleteText: {
+    color: "#FFFFFF",
+    marginTop: 4,
+    fontWeight: "600",
+  },
+  deleteModalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.7)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: Spacing.xl,
+  },
+  deleteModalContent: {
+    backgroundColor: AppColors.surface,
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.xl,
+    width: "100%",
+    maxWidth: 320,
+    alignItems: "center",
+  },
+  deleteModalIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: "rgba(220, 20, 60, 0.15)",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: Spacing.lg,
+  },
+  deleteModalTitle: {
+    textAlign: "center",
+    marginBottom: Spacing.md,
+  },
+  deleteModalText: {
+    textAlign: "center",
+    color: AppColors.textSecondary,
+    marginBottom: Spacing.sm,
+  },
+  deleteModalWarning: {
+    textAlign: "center",
+    color: AppColors.redCard,
+    marginBottom: Spacing.xl,
+  },
+  deleteModalButtons: {
+    flexDirection: "row",
+    gap: Spacing.md,
+    width: "100%",
+  },
+  deleteModalButton: {
+    flex: 1,
+    height: 48,
+    borderRadius: BorderRadius.md,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  cancelButton: {
+    backgroundColor: AppColors.elevated,
+  },
+  confirmDeleteButton: {
+    backgroundColor: AppColors.redCard,
   },
 });
