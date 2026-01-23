@@ -173,9 +173,10 @@ export default function LiveMatchScreen() {
     loadData();
   }, [loadData]);
 
-  // Timer effect using setInterval for reliable updates every second
+  // Timer effect using frequent setInterval for reliable visual updates on iOS
   useEffect(() => {
     let intervalId: ReturnType<typeof setInterval> | null = null;
+    let lastDisplayedSecond = -1;
     
     if (isRunning) {
       // Use timestamp-based timing for accurate time calculation
@@ -183,20 +184,27 @@ export default function LiveMatchScreen() {
         timerStartRef.current = Date.now();
       }
       
-      // Update immediately on start
+      // Update function that only triggers re-render when second changes
       const updateTime = () => {
         if (timerStartRef.current) {
           const now = Date.now();
           const elapsed = Math.floor((now - timerStartRef.current) / 1000);
-          setMatchTime(accumulatedTimeRef.current + elapsed);
+          const newTime = accumulatedTimeRef.current + elapsed;
+          
+          // Only update state if the displayed second has changed
+          if (newTime !== lastDisplayedSecond) {
+            lastDisplayedSecond = newTime;
+            setMatchTime(newTime);
+          }
         }
       };
       
       // Initial update
       updateTime();
       
-      // Then update every second
-      intervalId = setInterval(updateTime, 1000);
+      // Use 250ms interval for more reliable updates on iOS
+      // The timestamp calculation ensures accuracy regardless of interval timing
+      intervalId = setInterval(updateTime, 250);
     } else {
       // When stopping, save accumulated time
       if (timerStartRef.current) {
