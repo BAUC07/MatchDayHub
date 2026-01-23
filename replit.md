@@ -69,12 +69,14 @@ MVP complete with core functionality:
 - Undo last event supported
 - Pause/resume clock (long-press to pause)
 - Timeline filter to hide substitution events
+- Swipe-to-delete events in timeline (recalculates score automatically)
 
 ### Stats Tab
 - Team selector when multiple teams exist
 - Filter by All/Home/Away matches
 - Results pie chart (wins, draws, losses)
 - Goal Sources pie chart (open play, corner, free kick, penalty)
+- Goals Scored section (matches, total scored, avg per game, blank games)
 - Goals Conceded section (matches, total conceded, avg per game, clean sheets)
 - Top Scorers table with goals and average per game
 - Top Assists table with assists and average per game
@@ -86,6 +88,7 @@ MVP complete with core functionality:
 - Final score with result badge
 - Stats grid (goals for/against, cards)
 - Timeline visualization with event markers
+- Goal events show scorer, assist player, and goal type (open play, corner, etc.)
 
 ## File Structure
 ```
