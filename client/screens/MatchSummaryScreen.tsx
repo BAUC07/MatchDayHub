@@ -298,6 +298,8 @@ export default function MatchSummaryScreen() {
                     <Feather name="target" size={14} color={AppColors.pitchGreen} />
                     <ThemedText type="small">
                       Goal: {getPlayerName(event.playerId)}
+                      {event.assistPlayerId ? ` (assist: ${getPlayerName(event.assistPlayerId)})` : ""}
+                      {event.goalType ? ` - ${event.goalType.replace("_", " ")}` : ""}
                     </ThemedText>
                   </>
                 ) : event.type === "goal_against" ? (

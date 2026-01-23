@@ -80,6 +80,13 @@ interface GoalsConcededStat {
   cleanSheets: number;
 }
 
+interface GoalsScoredStat {
+  matchesPlayed: number;
+  totalScored: number;
+  avgPerGame: number;
+  blankGames: number;
+}
+
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
 export default function StatsScreen() {
@@ -498,6 +505,15 @@ export default function StatsScreen() {
     return { matchesPlayed, totalConceded, avgPerGame, cleanSheets };
   })();
 
+  const goalsScored: GoalsScoredStat = (() => {
+    const matchesPlayed = filteredMatches.length;
+    const totalScored = filteredMatches.reduce((sum, m) => sum + m.scoreFor, 0);
+    const blankGames = filteredMatches.filter((m) => m.scoreFor === 0).length;
+    const avgPerGame = matchesPlayed > 0 ? totalScored / matchesPlayed : 0;
+    
+    return { matchesPlayed, totalScored, avgPerGame, blankGames };
+  })();
+
   const playerMinutes: MinutesStat[] = (() => {
     const minutesMap = new Map<string, { minutes: number; matches: number }>();
     
@@ -723,7 +739,7 @@ export default function StatsScreen() {
       console.error("Error generating PDF:", error);
       Alert.alert("Error", "Failed to generate PDF. Please try again.");
     }
-  }, [selectedTeam, filteredMatches, resultsData, goalsData, goalsConceded, topScorers, topAssists, cardsReceived]);
+  }, [selectedTeam, filteredMatches, resultsData, goalsData, goalsConceded, goalsScored, topScorers, topAssists, cardsReceived]);
 
   const renderPieChart = (
     data: { value: number; color: string; label: string }[],
@@ -914,6 +930,48 @@ export default function StatsScreen() {
           </ThemedText>
           <ThemedText type="caption" style={styles.concededLabel}>
             Clean Sheets
+          </ThemedText>
+        </View>
+      </View>
+    </Card>
+  );
+
+  const renderGoalsScored = () => (
+    <Card elevation={1} style={styles.tableCard}>
+      <ThemedText type="h4" style={styles.tableTitle}>
+        Goals Scored
+      </ThemedText>
+      <View style={styles.concededGrid}>
+        <View style={styles.concededItem}>
+          <ThemedText type="h3" style={styles.concededValue}>
+            {goalsScored.matchesPlayed}
+          </ThemedText>
+          <ThemedText type="caption" style={styles.concededLabel}>
+            Played
+          </ThemedText>
+        </View>
+        <View style={styles.concededItem}>
+          <ThemedText type="h3" style={[styles.concededValue, { color: AppColors.pitchGreen }]}>
+            {goalsScored.totalScored}
+          </ThemedText>
+          <ThemedText type="caption" style={styles.concededLabel}>
+            Scored
+          </ThemedText>
+        </View>
+        <View style={styles.concededItem}>
+          <ThemedText type="h3" style={[styles.concededValue, { color: AppColors.textSecondary }]}>
+            {goalsScored.avgPerGame.toFixed(1)}
+          </ThemedText>
+          <ThemedText type="caption" style={styles.concededLabel}>
+            Per Game
+          </ThemedText>
+        </View>
+        <View style={styles.concededItem}>
+          <ThemedText type="h3" style={[styles.concededValue, { color: AppColors.redCard }]}>
+            {goalsScored.blankGames}
+          </ThemedText>
+          <ThemedText type="caption" style={styles.concededLabel}>
+            Blanks
           </ThemedText>
         </View>
       </View>
@@ -1168,6 +1226,7 @@ export default function StatsScreen() {
           ])}
         </Card>
 
+        {renderGoalsScored()}
         {renderGoalsConceded()}
         {renderTable("Top Scorers", topScorers, "Goals")}
         {renderTable("Top Assists", topAssists, "Assists")}
