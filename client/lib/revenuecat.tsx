@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
 import { Platform } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import Purchases, { 
   PurchasesPackage, 
   CustomerInfo, 
@@ -9,6 +10,8 @@ import Purchases, {
 
 const ENTITLEMENT_ID = 'MatchDay Hub Pro';
 const API_KEY = process.env.EXPO_PUBLIC_REVENUECAT_API_KEY || '';
+const UNLOCK_CODE_KEY = '@matchday_unlock_code';
+const VALID_UNLOCK_CODE = 'MATCHDAYFEB2026';
 
 interface RevenueCatContextType {
   isElite: boolean;
@@ -18,6 +21,8 @@ interface RevenueCatContextType {
   purchasePackage: (pkg: PurchasesPackage) => Promise<boolean>;
   restorePurchases: () => Promise<boolean>;
   refreshCustomerInfo: () => Promise<void>;
+  unlockWithCode: (code: string) => Promise<boolean>;
+  isCodeUnlocked: boolean;
 }
 
 const RevenueCatContext = createContext<RevenueCatContextType>({
@@ -28,6 +33,8 @@ const RevenueCatContext = createContext<RevenueCatContextType>({
   purchasePackage: async () => false,
   restorePurchases: async () => false,
   refreshCustomerInfo: async () => {},
+  unlockWithCode: async () => false,
+  isCodeUnlocked: false,
 });
 
 export function useRevenueCat() {
@@ -43,11 +50,14 @@ export function RevenueCatProvider({ children }: RevenueCatProviderProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [customerInfo, setCustomerInfo] = useState<CustomerInfo | null>(null);
   const [currentOffering, setCurrentOffering] = useState<PurchasesOffering | null>(null);
+  const [isCodeUnlocked, setIsCodeUnlocked] = useState(false);
 
   const checkEntitlement = useCallback((info: CustomerInfo) => {
     const entitlement = info.entitlements.active[ENTITLEMENT_ID];
-    setIsElite(entitlement !== undefined);
     setCustomerInfo(info);
+    if (entitlement !== undefined) {
+      setIsElite(true);
+    }
   }, []);
 
   const refreshCustomerInfo = useCallback(async () => {
@@ -62,6 +72,13 @@ export function RevenueCatProvider({ children }: RevenueCatProviderProps) {
   useEffect(() => {
     const initRevenueCat = async () => {
       try {
+        // Check for code-based unlock first
+        const savedCode = await AsyncStorage.getItem(UNLOCK_CODE_KEY);
+        if (savedCode === VALID_UNLOCK_CODE) {
+          setIsCodeUnlocked(true);
+          setIsElite(true);
+        }
+
         if (!API_KEY) {
           console.warn('RevenueCat API key not configured');
           setIsLoading(false);
@@ -131,6 +148,17 @@ export function RevenueCatProvider({ children }: RevenueCatProviderProps) {
     }
   }, [checkEntitlement]);
 
+  const unlockWithCode = useCallback(async (code: string): Promise<boolean> => {
+    const normalizedCode = code.trim().toUpperCase();
+    if (normalizedCode === VALID_UNLOCK_CODE) {
+      await AsyncStorage.setItem(UNLOCK_CODE_KEY, normalizedCode);
+      setIsCodeUnlocked(true);
+      setIsElite(true);
+      return true;
+    }
+    return false;
+  }, []);
+
   return (
     <RevenueCatContext.Provider
       value={{
@@ -141,6 +169,8 @@ export function RevenueCatProvider({ children }: RevenueCatProviderProps) {
         purchasePackage,
         restorePurchases,
         refreshCustomerInfo,
+        unlockWithCode,
+        isCodeUnlocked,
       }}
     >
       {children}
