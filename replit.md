@@ -160,10 +160,12 @@ server/
 - Haptic feedback on all interactions
 
 ## Recent Changes
-- Integrated RevenueCat SDK for native in-app purchases (Monthly, Yearly, Lifetime tiers)
-- Added Paywall screen with package selection and restore purchases
-- Updated Settings, Stats, and Teams screens to use RevenueCat entitlement checks
-- Fixed timer reliability on iOS (uses timestamp-based timing that survives app backgrounding)
+- Replaced RevenueCat paywall with code-based unlock system (code: MATCHDAYFEB2026)
+- PaywallScreen now shows code entry UI instead of purchase options
+- Elite features unlocked via code stored in AsyncStorage
+- RevenueCat integration still in place for future use when purchases are ready
+- Removed "Priority Support" from Elite features list
+- Fixed timer reliability on iOS (uses setInterval with timestamp-based timing that survives app backgrounding)
 - Added date range filtering on Stats tab (defaults to current football season starting Aug 1)
 - Rebranded subscription tier from "Premium" to "Elite" throughout app
 - Added PDF export for team statistics (generates professional PDF with results, goals, scorers)
