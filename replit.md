@@ -160,6 +160,8 @@ server/
 - Haptic feedback on all interactions
 
 ## Recent Changes
+- Added swipe-to-delete for matches in Match History (swipe left, tap Delete, confirm)
+- Fixed half-time button transition: now shows "HT" → "2nd" → "END" through match phases
 - Replaced RevenueCat paywall with code-based unlock system (code: MATCHDAYFEB2026)
 - PaywallScreen now shows code entry UI instead of purchase options
 - Elite features unlocked via code stored in AsyncStorage
