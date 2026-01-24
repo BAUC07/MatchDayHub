@@ -118,6 +118,10 @@ export default function LiveMatchScreen() {
   const [loading, setLoading] = useState(true);
   const [isRunning, setIsRunning] = useState(false);
   const [matchTime, setMatchTime] = useState(0);
+  
+  // Debug: Log on every render to verify React reconciliation is happening
+  console.log('[Render] LiveMatchScreen rendered, matchTime:', matchTime);
+  
   const [showActionSheet, setShowActionSheet] = useState(false);
   const [currentAction, setCurrentAction] = useState<ActionType | null>(null);
   const [showTimeline, setShowTimeline] = useState(false);
@@ -173,54 +177,37 @@ export default function LiveMatchScreen() {
     loadData();
   }, [loadData]);
 
-  // Timer effect using requestAnimationFrame - more reliable than setInterval on iOS
-  // RAF runs every frame (~60fps), we throttle state updates to once per second
+  // Simple timer: increment state by 1 every second using functional setState
+  // This guarantees a new value each tick, forcing React to re-render
   useEffect(() => {
     if (isRunning) {
-      // Record start timestamp if not already set
+      // Record start timestamp for background restoration
       if (!timerStartRef.current) {
         timerStartRef.current = Date.now();
       }
       
-      const startTime = timerStartRef.current;
-      const baseTime = accumulatedTimeRef.current;
-      let lastSecond = -1;
-      let rafId: number;
+      // Recursive setTimeout - calls setMatchTime(prev => prev + 1) every second
+      let timeoutId: ReturnType<typeof setTimeout>;
       
-      // Calculate and set initial time immediately
-      const initialElapsed = Math.floor((Date.now() - startTime) / 1000);
-      setMatchTime(baseTime + initialElapsed);
-      lastSecond = initialElapsed;
-      
-      // RAF loop - runs every frame, updates state when second changes
       const tick = () => {
-        const currentSecond = Math.floor((Date.now() - startTime) / 1000);
-        if (currentSecond !== lastSecond) {
-          lastSecond = currentSecond;
-          setMatchTime(baseTime + currentSecond);
-          console.log('[Timer] Tick:', baseTime + currentSecond);
-        }
-        rafId = requestAnimationFrame(tick);
+        setMatchTime(prev => {
+          const newValue = prev + 1;
+          console.log('[Timer] setState called, new value:', newValue);
+          return newValue;
+        });
+        timeoutId = setTimeout(tick, 1000);
       };
       
-      rafId = requestAnimationFrame(tick);
+      // Start the first tick after 1 second
+      timeoutId = setTimeout(tick, 1000);
       
       return () => {
-        cancelAnimationFrame(rafId);
+        clearTimeout(timeoutId);
       };
     } else {
-      // When stopping, save accumulated time
-      if (timerStartRef.current) {
-        const now = Date.now();
-        const elapsed = Math.floor((now - timerStartRef.current) / 1000);
-        accumulatedTimeRef.current = accumulatedTimeRef.current + elapsed;
-        timerStartRef.current = null;
-      }
-      // Clear any existing interval
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-        intervalRef.current = null;
-      }
+      // When stopping, save accumulated time to ref for later restoration
+      accumulatedTimeRef.current = matchTime;
+      timerStartRef.current = null;
     }
   }, [isRunning]);
 
