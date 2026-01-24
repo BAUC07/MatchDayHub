@@ -174,6 +174,7 @@ export default function LiveMatchScreen() {
   }, [loadData]);
 
   // Timer effect using setInterval - updates every second
+  // Key: Each tick recalculates from timestamp using fresh Date.now()
   useEffect(() => {
     if (isRunning) {
       // Record start timestamp if not already set
@@ -181,28 +182,24 @@ export default function LiveMatchScreen() {
         timerStartRef.current = Date.now();
       }
       
+      // Store start time in a local variable for this effect instance
+      const startTime = timerStartRef.current;
+      const baseTime = accumulatedTimeRef.current;
+      
       // Calculate and set initial time immediately
-      const calculateTime = () => {
-        if (timerStartRef.current) {
-          const now = Date.now();
-          const elapsed = Math.floor((now - timerStartRef.current) / 1000);
-          return accumulatedTimeRef.current + elapsed;
-        }
-        return accumulatedTimeRef.current;
-      };
+      const now = Date.now();
+      const initialElapsed = Math.floor((now - startTime) / 1000);
+      setMatchTime(baseTime + initialElapsed);
       
-      setMatchTime(calculateTime());
-      
-      // Set up interval that updates every 100ms for smoother updates
-      intervalRef.current = setInterval(() => {
-        setMatchTime(calculateTime());
-      }, 100);
+      // Set up interval - each tick uses fresh Date.now() to recalculate
+      const id = setInterval(() => {
+        const currentTime = Date.now();
+        const elapsed = Math.floor((currentTime - startTime) / 1000);
+        setMatchTime(baseTime + elapsed);
+      }, 1000);
       
       return () => {
-        if (intervalRef.current) {
-          clearInterval(intervalRef.current);
-          intervalRef.current = null;
-        }
+        clearInterval(id);
       };
     } else {
       // When stopping, save accumulated time
