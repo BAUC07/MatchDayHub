@@ -196,7 +196,7 @@ export default function TeamsScreen() {
         <Card
           elevation={2}
           onPress={() => handleTeamPress(item)}
-          style={[styles.teamCard, isSelected ? styles.teamCardSelected : null]}
+          style={isSelected ? [styles.teamCard, styles.teamCardSelected] : styles.teamCard}
         >
           <View style={styles.teamCardContent}>
             {isManageMode ? (

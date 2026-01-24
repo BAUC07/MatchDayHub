@@ -1176,6 +1176,7 @@ export default function StatsScreen() {
                   style={[
                     styles.teamSelectorButton,
                     selectedTeamId === team.id && styles.teamSelectorButtonActive,
+                    team.isArchived && styles.teamSelectorButtonArchived,
                   ]}
                   onPress={() => setSelectedTeamId(team.id)}
                 >
@@ -1187,7 +1188,7 @@ export default function StatsScreen() {
                     ]}
                     numberOfLines={1}
                   >
-                    {team.name}
+                    {team.name}{team.isArchived ? " (Archived)" : ""}
                   </ThemedText>
                 </Pressable>
               ))}
@@ -1318,6 +1319,10 @@ const styles = StyleSheet.create({
   teamSelectorButtonActive: {
     backgroundColor: AppColors.pitchGreen,
     borderColor: AppColors.pitchGreen,
+  },
+  teamSelectorButtonArchived: {
+    borderStyle: "dashed",
+    opacity: 0.7,
   },
   teamSelectorText: { color: AppColors.textSecondary },
   teamSelectorTextActive: { color: "#FFFFFF", fontWeight: "600" },
