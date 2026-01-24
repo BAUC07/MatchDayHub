@@ -6,7 +6,6 @@ import {
   Pressable,
   RefreshControl,
   Modal,
-  Alert,
 } from "react-native";
 import { Image } from "expo-image";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -42,6 +41,7 @@ export default function TeamsScreen() {
   const [isManageMode, setIsManageMode] = useState(false);
   const [selectedTeamIds, setSelectedTeamIds] = useState<Set<string>>(new Set());
   const [showActionModal, setShowActionModal] = useState(false);
+  const [showConfirmModal, setShowConfirmModal] = useState<"delete" | "archive" | null>(null);
 
   const loadData = useCallback(async () => {
     try {
@@ -122,72 +122,45 @@ export default function TeamsScreen() {
     setShowActionModal(true);
   }, [selectedTeamIds.size]);
 
-  const handleDelete = useCallback(async () => {
+  const handleDelete = useCallback(() => {
     setShowActionModal(false);
-    const count = selectedTeamIds.size;
-    const teamNames = teams
-      .filter((t) => selectedTeamIds.has(t.id))
-      .map((t) => t.name)
-      .join(", ");
+    setShowConfirmModal("delete");
+  }, []);
 
-    Alert.alert(
-      "Delete Teams",
-      `Are you sure you want to permanently delete ${count} team${count > 1 ? "s" : ""} (${teamNames}) and all their match data? This cannot be undone.`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              for (const teamId of selectedTeamIds) {
-                await deleteTeamAndMatches(teamId);
-              }
-              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-              setSelectedTeamIds(new Set());
-              setIsManageMode(false);
-              loadData();
-            } catch (error) {
-              console.error("Error deleting teams:", error);
-              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-            }
-          },
-        },
-      ]
-    );
-  }, [selectedTeamIds, teams, loadData]);
-
-  const handleArchive = useCallback(async () => {
+  const handleArchive = useCallback(() => {
     setShowActionModal(false);
-    const count = selectedTeamIds.size;
-    const teamNames = teams
-      .filter((t) => selectedTeamIds.has(t.id))
-      .map((t) => t.name)
-      .join(", ");
+    setShowConfirmModal("archive");
+  }, []);
 
-    Alert.alert(
-      "Archive Teams",
-      `Archive ${count} team${count > 1 ? "s" : ""} (${teamNames})? They will be hidden from this list but their data will remain viewable in Stats.`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Archive",
-          onPress: async () => {
-            try {
-              await archiveTeams(Array.from(selectedTeamIds));
-              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-              setSelectedTeamIds(new Set());
-              setIsManageMode(false);
-              loadData();
-            } catch (error) {
-              console.error("Error archiving teams:", error);
-              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-            }
-          },
-        },
-      ]
-    );
-  }, [selectedTeamIds, teams, loadData]);
+  const confirmDelete = useCallback(async () => {
+    try {
+      for (const teamId of selectedTeamIds) {
+        await deleteTeamAndMatches(teamId);
+      }
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setSelectedTeamIds(new Set());
+      setIsManageMode(false);
+      setShowConfirmModal(null);
+      loadData();
+    } catch (error) {
+      console.error("Error deleting teams:", error);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    }
+  }, [selectedTeamIds, loadData]);
+
+  const confirmArchive = useCallback(async () => {
+    try {
+      await archiveTeams(Array.from(selectedTeamIds));
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setSelectedTeamIds(new Set());
+      setIsManageMode(false);
+      setShowConfirmModal(null);
+      loadData();
+    } catch (error) {
+      console.error("Error archiving teams:", error);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    }
+  }, [selectedTeamIds, loadData]);
 
   const renderTeamCard = useCallback(
     ({ item }: { item: Team }) => {
@@ -482,6 +455,54 @@ export default function TeamsScreen() {
           </View>
         </Pressable>
       </Modal>
+
+      <Modal
+        visible={showConfirmModal !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowConfirmModal(null)}
+      >
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => setShowConfirmModal(null)}
+        >
+          <View style={styles.modalContent}>
+            <ThemedText type="h4" style={styles.modalTitle}>
+              {showConfirmModal === "delete" ? "Delete Teams" : "Archive Teams"}
+            </ThemedText>
+            <ThemedText type="body" style={{ color: AppColors.textSecondary, textAlign: "center", marginBottom: Spacing.xl }}>
+              {showConfirmModal === "delete"
+                ? `Are you sure you want to permanently delete ${selectedTeamIds.size} team${selectedTeamIds.size > 1 ? "s" : ""} and all their match data? This cannot be undone.`
+                : `Archive ${selectedTeamIds.size} team${selectedTeamIds.size > 1 ? "s" : ""}? They will be hidden from this list but their data will remain viewable in Stats.`}
+            </ThemedText>
+
+            <View style={styles.confirmButtonRow}>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.confirmButton,
+                  styles.confirmButtonCancel,
+                  { opacity: pressed ? 0.8 : 1 },
+                ]}
+                onPress={() => setShowConfirmModal(null)}
+              >
+                <ThemedText type="body" style={{ color: "#FFFFFF" }}>Cancel</ThemedText>
+              </Pressable>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.confirmButton,
+                  showConfirmModal === "delete" ? styles.confirmButtonDelete : styles.confirmButtonArchive,
+                  { opacity: pressed ? 0.8 : 1 },
+                ]}
+                onPress={showConfirmModal === "delete" ? confirmDelete : confirmArchive}
+              >
+                <ThemedText type="body" style={{ color: "#FFFFFF", fontWeight: "600" }}>
+                  {showConfirmModal === "delete" ? "Delete" : "Archive"}
+                </ThemedText>
+              </Pressable>
+            </View>
+          </View>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -667,5 +688,24 @@ const styles = StyleSheet.create({
   modalButtonText: {
     marginLeft: Spacing.md,
     flex: 1,
+  },
+  confirmButtonRow: {
+    flexDirection: "row",
+    gap: Spacing.md,
+  },
+  confirmButton: {
+    flex: 1,
+    paddingVertical: Spacing.md,
+    borderRadius: BorderRadius.lg,
+    alignItems: "center",
+  },
+  confirmButtonCancel: {
+    backgroundColor: AppColors.elevated,
+  },
+  confirmButtonDelete: {
+    backgroundColor: AppColors.redCard,
+  },
+  confirmButtonArchive: {
+    backgroundColor: AppColors.warningYellow,
   },
 });
