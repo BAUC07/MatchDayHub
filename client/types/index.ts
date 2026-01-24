@@ -18,6 +18,7 @@ export interface Team {
   wins: number;
   draws: number;
   losses: number;
+  isArchived?: boolean;
 }
 
 export type MatchFormat = "5v5" | "7v7" | "9v9" | "11v11";

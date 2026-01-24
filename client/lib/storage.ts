@@ -54,6 +54,29 @@ export async function deleteTeam(teamId: string): Promise<void> {
   await saveTeams(filtered);
 }
 
+export async function deleteTeamAndMatches(teamId: string): Promise<void> {
+  const [teams, matches] = await Promise.all([getTeams(), getMatches()]);
+  const filteredTeams = teams.filter((t) => t.id !== teamId);
+  const filteredMatches = matches.filter((m) => m.teamId !== teamId);
+  await Promise.all([saveTeams(filteredTeams), saveMatches(filteredMatches)]);
+}
+
+export async function archiveTeams(teamIds: string[]): Promise<void> {
+  const teams = await getTeams();
+  const updated = teams.map((t) =>
+    teamIds.includes(t.id) ? { ...t, isArchived: true } : t
+  );
+  await saveTeams(updated);
+}
+
+export async function unarchiveTeam(teamId: string): Promise<void> {
+  const teams = await getTeams();
+  const updated = teams.map((t) =>
+    t.id === teamId ? { ...t, isArchived: false } : t
+  );
+  await saveTeams(updated);
+}
+
 export async function getMatches(): Promise<Match[]> {
   try {
     const data = await AsyncStorage.getItem(STORAGE_KEYS.MATCHES);
