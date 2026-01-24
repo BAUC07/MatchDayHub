@@ -173,8 +173,8 @@ export default function LiveMatchScreen() {
     loadData();
   }, [loadData]);
 
-  // Timer effect using setInterval - updates every second
-  // Key: Each tick recalculates from timestamp using fresh Date.now()
+  // Timer effect using requestAnimationFrame - more reliable than setInterval on iOS
+  // RAF runs every frame (~60fps), we throttle state updates to once per second
   useEffect(() => {
     if (isRunning) {
       // Record start timestamp if not already set
@@ -182,24 +182,31 @@ export default function LiveMatchScreen() {
         timerStartRef.current = Date.now();
       }
       
-      // Store start time in a local variable for this effect instance
       const startTime = timerStartRef.current;
       const baseTime = accumulatedTimeRef.current;
+      let lastSecond = -1;
+      let rafId: number;
       
       // Calculate and set initial time immediately
-      const now = Date.now();
-      const initialElapsed = Math.floor((now - startTime) / 1000);
+      const initialElapsed = Math.floor((Date.now() - startTime) / 1000);
       setMatchTime(baseTime + initialElapsed);
+      lastSecond = initialElapsed;
       
-      // Set up interval - each tick uses fresh Date.now() to recalculate
-      const id = setInterval(() => {
-        const currentTime = Date.now();
-        const elapsed = Math.floor((currentTime - startTime) / 1000);
-        setMatchTime(baseTime + elapsed);
-      }, 1000);
+      // RAF loop - runs every frame, updates state when second changes
+      const tick = () => {
+        const currentSecond = Math.floor((Date.now() - startTime) / 1000);
+        if (currentSecond !== lastSecond) {
+          lastSecond = currentSecond;
+          setMatchTime(baseTime + currentSecond);
+          console.log('[Timer] Tick:', baseTime + currentSecond);
+        }
+        rafId = requestAnimationFrame(tick);
+      };
+      
+      rafId = requestAnimationFrame(tick);
       
       return () => {
-        clearInterval(id);
+        cancelAnimationFrame(rafId);
       };
     } else {
       // When stopping, save accumulated time
