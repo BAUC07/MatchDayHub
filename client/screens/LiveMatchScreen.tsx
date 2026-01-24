@@ -17,7 +17,7 @@ import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
-import { Gesture, GestureDetector, GestureHandlerRootView, Swipeable } from "react-native-gesture-handler";
+import { Gesture, GestureDetector, Swipeable } from "react-native-gesture-handler";
 import Animated, { useSharedValue, useAnimatedStyle, withSpring, runOnJS } from "react-native-reanimated";
 
 import { ThemedText } from "@/components/ThemedText";
@@ -758,7 +758,7 @@ export default function LiveMatchScreen() {
       </View>
 
       <View style={styles.middleZone}>
-        <GestureHandlerRootView style={styles.pitchContainer}>
+        <View style={styles.pitchContainer}>
           <View style={styles.pitch} onLayout={handlePitchLayout}>
             <View style={styles.pitchCenterCircle} />
             <View style={styles.pitchCenterLine} />
@@ -786,7 +786,7 @@ export default function LiveMatchScreen() {
               })}
             </View>
           </View>
-        </GestureHandlerRootView>
+        </View>
 
         <View style={styles.benchContainer}>
           <ThemedText type="small" style={styles.benchLabel}>

@@ -15,7 +15,7 @@ import { RevenueCatProvider } from "@/lib/revenuecat";
 
 // STEP 2 TEST: Simulate LiveMatchScreen timer logic without navigation
 // This tests if the timer pattern from LiveMatchScreen works when rendered directly
-const ENABLE_TIMER_TEST = true;
+const ENABLE_TIMER_TEST = false; // Disabled - testing complete
 
 function TimerTestComponent() {
   const [matchTime, setMatchTime] = useState(0);
