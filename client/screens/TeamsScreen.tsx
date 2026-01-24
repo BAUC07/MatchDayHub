@@ -3,9 +3,10 @@ import {
   View,
   FlatList,
   StyleSheet,
-  Image as RNImage,
   Pressable,
   RefreshControl,
+  Modal,
+  Alert,
 } from "react-native";
 import { Image } from "expo-image";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -21,7 +22,7 @@ import { Card } from "@/components/Card";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, AppColors, BorderRadius } from "@/constants/theme";
 import { Team } from "@/types";
-import { getTeams } from "@/lib/storage";
+import { getTeams, deleteTeamAndMatches, archiveTeams } from "@/lib/storage";
 import { useRevenueCat } from "@/lib/revenuecat";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 
@@ -38,11 +39,15 @@ export default function TeamsScreen() {
   const [teams, setTeams] = useState<Team[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [isManageMode, setIsManageMode] = useState(false);
+  const [selectedTeamIds, setSelectedTeamIds] = useState<Set<string>>(new Set());
+  const [showActionModal, setShowActionModal] = useState(false);
 
   const loadData = useCallback(async () => {
     try {
       const teamsData = await getTeams();
-      setTeams(teamsData);
+      const activeTeams = teamsData.filter((t) => !t.isArchived);
+      setTeams(activeTeams);
     } catch (error) {
       console.error("Error loading teams:", error);
     } finally {
@@ -54,6 +59,8 @@ export default function TeamsScreen() {
   useFocusEffect(
     useCallback(() => {
       loadData();
+      setIsManageMode(false);
+      setSelectedTeamIds(new Set());
     }, [loadData])
   );
 
@@ -62,7 +69,8 @@ export default function TeamsScreen() {
     loadData();
   }, [loadData]);
 
-  const canAddTeam = isElite || teams.length < 1;
+  const activeTeamCount = teams.filter((t) => !t.isArchived).length;
+  const canAddTeam = isElite || activeTeamCount < 1;
 
   const handleAddTeam = useCallback(() => {
     if (canAddTeam) {
@@ -76,51 +84,166 @@ export default function TeamsScreen() {
 
   const handleTeamPress = useCallback(
     (team: Team) => {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      navigation.navigate("TeamDetail", { teamId: team.id });
+      if (isManageMode) {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        setSelectedTeamIds((prev) => {
+          const next = new Set(prev);
+          if (next.has(team.id)) {
+            next.delete(team.id);
+          } else {
+            next.add(team.id);
+          }
+          return next;
+        });
+      } else {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        navigation.navigate("TeamDetail", { teamId: team.id });
+      }
     },
-    [navigation]
+    [isManageMode, navigation]
   );
 
+  const handleManagePress = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (isManageMode) {
+      setIsManageMode(false);
+      setSelectedTeamIds(new Set());
+    } else {
+      setIsManageMode(true);
+    }
+  }, [isManageMode]);
+
+  const handleActionPress = useCallback(() => {
+    if (selectedTeamIds.size === 0) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      return;
+    }
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setShowActionModal(true);
+  }, [selectedTeamIds.size]);
+
+  const handleDelete = useCallback(async () => {
+    setShowActionModal(false);
+    const count = selectedTeamIds.size;
+    const teamNames = teams
+      .filter((t) => selectedTeamIds.has(t.id))
+      .map((t) => t.name)
+      .join(", ");
+
+    Alert.alert(
+      "Delete Teams",
+      `Are you sure you want to permanently delete ${count} team${count > 1 ? "s" : ""} (${teamNames}) and all their match data? This cannot be undone.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              for (const teamId of selectedTeamIds) {
+                await deleteTeamAndMatches(teamId);
+              }
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              setSelectedTeamIds(new Set());
+              setIsManageMode(false);
+              loadData();
+            } catch (error) {
+              console.error("Error deleting teams:", error);
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+            }
+          },
+        },
+      ]
+    );
+  }, [selectedTeamIds, teams, loadData]);
+
+  const handleArchive = useCallback(async () => {
+    setShowActionModal(false);
+    const count = selectedTeamIds.size;
+    const teamNames = teams
+      .filter((t) => selectedTeamIds.has(t.id))
+      .map((t) => t.name)
+      .join(", ");
+
+    Alert.alert(
+      "Archive Teams",
+      `Archive ${count} team${count > 1 ? "s" : ""} (${teamNames})? They will be hidden from this list but their data will remain viewable in Stats.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Archive",
+          onPress: async () => {
+            try {
+              await archiveTeams(Array.from(selectedTeamIds));
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              setSelectedTeamIds(new Set());
+              setIsManageMode(false);
+              loadData();
+            } catch (error) {
+              console.error("Error archiving teams:", error);
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+            }
+          },
+        },
+      ]
+    );
+  }, [selectedTeamIds, teams, loadData]);
+
   const renderTeamCard = useCallback(
-    ({ item }: { item: Team }) => (
-      <Card
-        elevation={2}
-        onPress={() => handleTeamPress(item)}
-        style={styles.teamCard}
-      >
-        <View style={styles.teamCardContent}>
-          <View style={styles.teamBadge}>
-            {item.logoUri ? (
-              <Image source={{ uri: item.logoUri }} style={styles.teamLogoImage} />
-            ) : (
-              <Feather name="shield" size={32} color={AppColors.pitchGreen} />
-            )}
-          </View>
-          <View style={styles.teamInfo}>
-            <ThemedText type="h4" style={styles.teamName}>
-              {item.name}
-            </ThemedText>
-            <ThemedText
-              type="small"
-              style={{ color: AppColors.textSecondary }}
-            >
-              {item.players.length} players
-            </ThemedText>
-            {item.matchesPlayed > 0 ? (
+    ({ item }: { item: Team }) => {
+      const isSelected = selectedTeamIds.has(item.id);
+      return (
+        <Card
+          elevation={2}
+          onPress={() => handleTeamPress(item)}
+          style={[styles.teamCard, isSelected ? styles.teamCardSelected : null]}
+        >
+          <View style={styles.teamCardContent}>
+            {isManageMode ? (
+              <View style={styles.checkbox}>
+                {isSelected ? (
+                  <View style={styles.checkboxChecked}>
+                    <Feather name="check" size={16} color="#FFFFFF" />
+                  </View>
+                ) : (
+                  <View style={styles.checkboxUnchecked} />
+                )}
+              </View>
+            ) : null}
+            <View style={styles.teamBadge}>
+              {item.logoUri ? (
+                <Image source={{ uri: item.logoUri }} style={styles.teamLogoImage} />
+              ) : (
+                <Feather name="shield" size={32} color={AppColors.pitchGreen} />
+              )}
+            </View>
+            <View style={styles.teamInfo}>
+              <ThemedText type="h4" style={styles.teamName}>
+                {item.name}
+              </ThemedText>
               <ThemedText
                 type="small"
-                style={{ color: AppColors.textSecondary, marginTop: 4 }}
+                style={{ color: AppColors.textSecondary }}
               >
-                W{item.wins} D{item.draws} L{item.losses}
+                {item.players.length} players
               </ThemedText>
+              {item.matchesPlayed > 0 ? (
+                <ThemedText
+                  type="small"
+                  style={{ color: AppColors.textSecondary, marginTop: 4 }}
+                >
+                  W{item.wins} D{item.draws} L{item.losses}
+                </ThemedText>
+              ) : null}
+            </View>
+            {!isManageMode ? (
+              <Feather name="chevron-right" size={24} color={AppColors.textSecondary} />
             ) : null}
           </View>
-          <Feather name="chevron-right" size={24} color={AppColors.textSecondary} />
-        </View>
-      </Card>
-    ),
-    [handleTeamPress]
+        </Card>
+      );
+    },
+    [handleTeamPress, isManageMode, selectedTeamIds]
   );
 
   const renderCreateTeamCard = useCallback(
@@ -164,6 +287,35 @@ export default function TeamsScreen() {
     [canAddTeam, handleAddTeam, theme.text]
   );
 
+  const renderManageButton = useCallback(
+    () => (
+      <Pressable
+        style={({ pressed }) => [
+          styles.manageButton,
+          { opacity: pressed ? 0.8 : 1 },
+          isManageMode && styles.manageButtonActive,
+        ]}
+        onPress={handleManagePress}
+      >
+        <Feather
+          name={isManageMode ? "x" : "settings"}
+          size={20}
+          color={isManageMode ? "#FFFFFF" : AppColors.textSecondary}
+        />
+        <ThemedText
+          type="body"
+          style={{
+            color: isManageMode ? "#FFFFFF" : AppColors.textSecondary,
+            marginLeft: Spacing.sm,
+          }}
+        >
+          {isManageMode ? "Cancel" : "Manage Teams"}
+        </ThemedText>
+      </Pressable>
+    ),
+    [isManageMode, handleManagePress]
+  );
+
   const renderEmptyState = useCallback(
     () => (
       <View style={styles.emptyContainer}>
@@ -183,6 +335,24 @@ export default function TeamsScreen() {
     []
   );
 
+  const renderListHeader = useCallback(() => {
+    if (teams.length === 0) {
+      return renderEmptyState();
+    }
+    return renderManageButton();
+  }, [teams.length, renderEmptyState, renderManageButton]);
+
+  const renderListFooter = useCallback(() => {
+    if (isManageMode) {
+      return null;
+    }
+    return (
+      <View style={styles.footerContainer}>
+        {renderCreateTeamCard()}
+      </View>
+    );
+  }, [isManageMode, renderCreateTeamCard]);
+
   if (loading) {
     return (
       <View
@@ -201,39 +371,126 @@ export default function TeamsScreen() {
   }
 
   return (
-    <FlatList
-      style={[styles.container, { backgroundColor: theme.backgroundRoot }]}
-      contentContainerStyle={[
-        styles.listContent,
-        {
-          paddingTop: headerHeight + Spacing.xl,
-          paddingBottom: tabBarHeight + Spacing.xl,
-        },
-      ]}
-      scrollIndicatorInsets={{ bottom: insets.bottom }}
-      data={teams}
-      keyExtractor={(item) => item.id}
-      renderItem={renderTeamCard}
-      ListHeaderComponent={
-        <>
-          {renderCreateTeamCard()}
-          {teams.length === 0 ? renderEmptyState() : null}
-        </>
-      }
-      refreshControl={
-        <RefreshControl
-          refreshing={refreshing}
-          onRefresh={handleRefresh}
-          tintColor={AppColors.pitchGreen}
-        />
-      }
-      ItemSeparatorComponent={() => <View style={styles.separator} />}
-    />
+    <View style={[styles.container, { backgroundColor: theme.backgroundRoot }]}>
+      <FlatList
+        style={styles.list}
+        contentContainerStyle={[
+          styles.listContent,
+          {
+            paddingTop: headerHeight + Spacing.xl,
+            paddingBottom: isManageMode ? 100 : tabBarHeight + Spacing.xl,
+          },
+        ]}
+        scrollIndicatorInsets={{ bottom: insets.bottom }}
+        data={teams}
+        keyExtractor={(item) => item.id}
+        renderItem={renderTeamCard}
+        ListHeaderComponent={renderListHeader}
+        ListFooterComponent={renderListFooter}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor={AppColors.pitchGreen}
+          />
+        }
+        ItemSeparatorComponent={() => <View style={styles.separator} />}
+      />
+
+      {isManageMode && selectedTeamIds.size > 0 ? (
+        <View style={[styles.actionBar, { paddingBottom: insets.bottom + Spacing.md }]}>
+          <Pressable
+            style={({ pressed }) => [
+              styles.actionButton,
+              styles.actionButtonAction,
+              { opacity: pressed ? 0.8 : 1 },
+            ]}
+            onPress={handleActionPress}
+          >
+            <ThemedText type="body" style={{ color: "#FFFFFF", fontWeight: "600" }}>
+              Actions ({selectedTeamIds.size})
+            </ThemedText>
+          </Pressable>
+        </View>
+      ) : null}
+
+      <Modal
+        visible={showActionModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowActionModal(false)}
+      >
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => setShowActionModal(false)}
+        >
+          <View style={styles.modalContent}>
+            <ThemedText type="h4" style={styles.modalTitle}>
+              What would you like to do with {selectedTeamIds.size} team{selectedTeamIds.size > 1 ? "s" : ""}?
+            </ThemedText>
+
+            <Pressable
+              style={({ pressed }) => [
+                styles.modalButton,
+                styles.modalButtonArchive,
+                { opacity: pressed ? 0.8 : 1 },
+              ]}
+              onPress={handleArchive}
+            >
+              <Feather name="archive" size={20} color={AppColors.warningYellow} />
+              <View style={styles.modalButtonText}>
+                <ThemedText type="body" style={{ color: "#FFFFFF", fontWeight: "600" }}>
+                  Archive
+                </ThemedText>
+                <ThemedText type="small" style={{ color: AppColors.textSecondary }}>
+                  Hide from list, keep data for Stats
+                </ThemedText>
+              </View>
+            </Pressable>
+
+            <Pressable
+              style={({ pressed }) => [
+                styles.modalButton,
+                styles.modalButtonDelete,
+                { opacity: pressed ? 0.8 : 1 },
+              ]}
+              onPress={handleDelete}
+            >
+              <Feather name="trash-2" size={20} color={AppColors.redCard} />
+              <View style={styles.modalButtonText}>
+                <ThemedText type="body" style={{ color: "#FFFFFF", fontWeight: "600" }}>
+                  Delete
+                </ThemedText>
+                <ThemedText type="small" style={{ color: AppColors.textSecondary }}>
+                  Permanently remove team and all data
+                </ThemedText>
+              </View>
+            </Pressable>
+
+            <Pressable
+              style={({ pressed }) => [
+                styles.modalButton,
+                styles.modalButtonCancel,
+                { opacity: pressed ? 0.8 : 1 },
+              ]}
+              onPress={() => setShowActionModal(false)}
+            >
+              <ThemedText type="body" style={{ color: AppColors.textSecondary }}>
+                Cancel
+              </ThemedText>
+            </Pressable>
+          </View>
+        </Pressable>
+      </Modal>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
+    flex: 1,
+  },
+  list: {
     flex: 1,
   },
   listContent: {
@@ -244,13 +501,24 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
+  manageButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-end",
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    marginBottom: Spacing.lg,
+    borderRadius: BorderRadius.lg,
+  },
+  manageButtonActive: {
+    backgroundColor: AppColors.elevated,
+  },
   createTeamCard: {
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: AppColors.surface,
     borderRadius: BorderRadius["2xl"],
     padding: Spacing.lg,
-    marginBottom: Spacing.xl,
     borderWidth: 2,
     borderColor: AppColors.pitchGreen,
     borderStyle: "dashed",
@@ -270,11 +538,36 @@ const styles = StyleSheet.create({
   createTeamText: {
     flex: 1,
   },
+  footerContainer: {
+    marginTop: Spacing.xl,
+  },
   teamCard: {
     padding: Spacing.lg,
   },
+  teamCardSelected: {
+    borderWidth: 2,
+    borderColor: AppColors.pitchGreen,
+  },
   teamCardContent: {
     flexDirection: "row",
+    alignItems: "center",
+  },
+  checkbox: {
+    marginRight: Spacing.md,
+  },
+  checkboxUnchecked: {
+    width: 24,
+    height: 24,
+    borderRadius: BorderRadius.sm,
+    borderWidth: 2,
+    borderColor: AppColors.textSecondary,
+  },
+  checkboxChecked: {
+    width: 24,
+    height: 24,
+    borderRadius: BorderRadius.sm,
+    backgroundColor: AppColors.pitchGreen,
+    justifyContent: "center",
     alignItems: "center",
   },
   teamBadge: {
@@ -319,5 +612,60 @@ const styles = StyleSheet.create({
   emptyText: {
     textAlign: "center",
     color: AppColors.textSecondary,
+  },
+  actionBar: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: AppColors.surface,
+    borderTopWidth: 1,
+    borderTopColor: AppColors.elevated,
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.md,
+  },
+  actionButton: {
+    paddingVertical: Spacing.md,
+    borderRadius: BorderRadius.lg,
+    alignItems: "center",
+  },
+  actionButtonAction: {
+    backgroundColor: AppColors.pitchGreen,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.7)",
+    justifyContent: "flex-end",
+  },
+  modalContent: {
+    backgroundColor: AppColors.surface,
+    borderTopLeftRadius: BorderRadius["2xl"],
+    borderTopRightRadius: BorderRadius["2xl"],
+    padding: Spacing.xl,
+  },
+  modalTitle: {
+    textAlign: "center",
+    marginBottom: Spacing.xl,
+  },
+  modalButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: Spacing.lg,
+    borderRadius: BorderRadius.lg,
+    marginBottom: Spacing.md,
+  },
+  modalButtonArchive: {
+    backgroundColor: AppColors.elevated,
+  },
+  modalButtonDelete: {
+    backgroundColor: AppColors.elevated,
+  },
+  modalButtonCancel: {
+    justifyContent: "center",
+    backgroundColor: "transparent",
+  },
+  modalButtonText: {
+    marginLeft: Spacing.md,
+    flex: 1,
   },
 });
