@@ -716,6 +716,10 @@ export default function LiveMatchScreen() {
             </ThemedText>
           ) : null}
         </View>
+        {/* DEBUG: Show raw matchTime to verify React is re-rendering */}
+        <ThemedText type="small" style={{ color: '#ff0', marginLeft: 8 }}>
+          [{matchTime}]
+        </ThemedText>
         <Pressable
           onPress={handleToggleClock}
           onLongPress={handlePauseLongPress}
