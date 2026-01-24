@@ -1,0 +1,49 @@
+We need to stop iterating on timer mechanisms. Multiple correct implementations now exist (setInterval, recursive setTimeout, requestAnimationFrame, simple counter) and all fail in the same way. This conclusively proves the issue is not timekeeping, scheduling, or iOS timer throttling.
+The problem is that React renders for this screen are being blocked upstream.
+Please follow the steps below exactly and in order. Do not modify the timer logic further until these are completed.
+Step 1: Prove React can re-render at all
+Create a temporary test component with no navigation, no parents, no providers, and no memoisation, and render it as the app root:
+A single useState counter
+setState(prev => prev + 1) every second
+console.log in the component body (render path)
+The state value rendered directly in JSX
+Expected result:
+The number increments visually every second
+The render log fires every second
+If this does not work, there is a fundamental render issue unrelated to the match screen.
+Step 2: Isolate LiveMatchScreen
+Render LiveMatchScreen directly as the root component:
+No React Navigation
+No parent wrappers
+No React.memo
+No useMemo / useCallback around render values
+Confirm:
+setMatchTime(prev => prev + 1) fires every second
+The render log inside the component body fires every second
+The UI visibly increments
+If this works, the issue is confirmed to be navigation or parent-level optimisation.
+Step 3: If navigation is involved, disable all render freezing
+If LiveMatchScreen lives inside React Navigation, explicitly test with:
+freezeOnBlur: false
+detachInactiveScreens: false
+No focus-based conditional rendering
+No memoisation of the screen or any parent components
+React Navigation commonly freezes renders while allowing state updates to continue. This exactly matches the observed behaviour.
+Step 4: Verify the rendered value is the state itself
+Confirm that:
+The value shown in JSX is the state variable itself (matchTime)
+It is not derived from timestamps during render
+It is not passed through selectors, memoised transforms, or calculated props
+The render must be as simple as:
+<Text>{matchTime}</Text>
+Acceptance criteria (non-negotiable)
+This is considered fixed only when:
+The timer visibly increments once per second
+While the app remains in the foreground
+Without switching apps
+Without relying on AppState or focus changes
+Until React reconciliation is proven to occur every second, no timer implementation will ever succeed.
+Please report back with:
+Whether Step 1 works
+Whether Step 2 works
+Exactly where renders stop occurring
