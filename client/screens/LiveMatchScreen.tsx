@@ -35,6 +35,118 @@ const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
 type ActionType = "goal_for" | "goal_against" | "card" | "penalty" | "sub";
 
+// LiveTimer: Standalone component with isolated state management
+// NOT wrapped in React.memo - manages its own re-renders independently
+interface LiveTimerProps {
+  startTimestamp: number | null;
+  isRunning: boolean;
+  baseTime: number;
+  plannedDuration: number;
+  isSecondHalf: boolean;
+  firstHalfAddedTime: number;
+}
+
+function LiveTimer({ 
+  startTimestamp, 
+  isRunning, 
+  baseTime, 
+  plannedDuration, 
+  isSecondHalf, 
+  firstHalfAddedTime 
+}: LiveTimerProps) {
+  // Local state that forces re-renders - completely isolated from parent
+  const [displayTick, setDisplayTick] = useState(0);
+  
+  // Log on every render to verify this component is re-rendering
+  console.log('[LiveTimer] Render, displayTick:', displayTick, 'isRunning:', isRunning);
+  
+  // Timer that updates local state every second
+  useEffect(() => {
+    if (isRunning) {
+      console.log('[LiveTimer] Starting interval');
+      const id = setInterval(() => {
+        setDisplayTick(prev => {
+          const newTick = prev + 1;
+          console.log('[LiveTimer] Tick callback fired, newTick:', newTick);
+          return newTick;
+        });
+      }, 1000);
+      
+      return () => {
+        console.log('[LiveTimer] Clearing interval');
+        clearInterval(id);
+      };
+    }
+  }, [isRunning]);
+  
+  // Calculate elapsed time from timestamp on each render
+  const getElapsedSeconds = (): number => {
+    if (!isRunning || !startTimestamp) {
+      return baseTime;
+    }
+    const now = Date.now();
+    const elapsed = Math.floor((now - startTimestamp) / 1000);
+    return baseTime + elapsed;
+  };
+  
+  const matchTime = getElapsedSeconds();
+  const halfDuration = plannedDuration / 2;
+  const halfMins = Math.floor(halfDuration / 60);
+  const fullMins = Math.floor(plannedDuration / 60);
+  
+  // Format time for display
+  const formatTime = (seconds: number): string => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+  
+  let mainDisplay: string;
+  let addedDisplay: string = '';
+  
+  if (!isSecondHalf) {
+    if (matchTime <= halfDuration) {
+      mainDisplay = formatTime(matchTime);
+    } else {
+      const addedSecs = matchTime - halfDuration;
+      const addedMins = Math.floor(addedSecs / 60);
+      const addedRemSecs = addedSecs % 60;
+      mainDisplay = `${halfMins}'`;
+      addedDisplay = `+${addedMins}:${addedRemSecs.toString().padStart(2, '0')}`;
+    }
+  } else {
+    const secondHalfTime = matchTime - halfDuration - firstHalfAddedTime;
+    const displayTime = halfDuration + secondHalfTime;
+    
+    if (displayTime <= plannedDuration) {
+      mainDisplay = formatTime(displayTime);
+    } else {
+      const addedSecs = displayTime - plannedDuration;
+      const addedMins = Math.floor(addedSecs / 60);
+      const addedRemSecs = addedSecs % 60;
+      mainDisplay = `${fullMins}'`;
+      addedDisplay = `+${addedMins}:${addedRemSecs.toString().padStart(2, '0')}`;
+    }
+  }
+  
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 4 }}>
+      <ThemedText type="h2" style={{ color: '#FFFFFF', fontVariant: ['tabular-nums'] }}>
+        {mainDisplay}
+      </ThemedText>
+      {addedDisplay ? (
+        <ThemedText type="body" style={{ color: AppColors.pitchGreen, fontWeight: '700' }}>
+          {addedDisplay}
+        </ThemedText>
+      ) : null}
+      {/* Debug: show raw tick to prove re-renders */}
+      <ThemedText type="small" style={{ color: '#ff0', marginLeft: 8 }}>
+        [t:{displayTick}]
+      </ThemedText>
+    </View>
+  );
+}
+
 interface PlayerPosition {
   playerId: string;
   x: number;
@@ -706,20 +818,14 @@ export default function LiveMatchScreen() {
       </View>
 
       <View style={styles.clockSection}>
-        <View style={styles.timeDisplay}>
-          <ThemedText type="h2" style={styles.clockText}>
-            {getTimeDisplay().main}
-          </ThemedText>
-          {getTimeDisplay().added ? (
-            <ThemedText type="body" style={styles.addedTimeText}>
-              {getTimeDisplay().added}
-            </ThemedText>
-          ) : null}
-        </View>
-        {/* DEBUG: Show raw matchTime to verify React is re-rendering */}
-        <ThemedText type="small" style={{ color: '#ff0', marginLeft: 8 }}>
-          [{matchTime}]
-        </ThemedText>
+        <LiveTimer
+          startTimestamp={timerStartRef.current}
+          isRunning={isRunning}
+          baseTime={accumulatedTimeRef.current}
+          plannedDuration={(match?.plannedDuration || 60) * 60}
+          isSecondHalf={isSecondHalf}
+          firstHalfAddedTime={firstHalfAddedTime}
+        />
         <Pressable
           onPress={handleToggleClock}
           onLongPress={handlePauseLongPress}

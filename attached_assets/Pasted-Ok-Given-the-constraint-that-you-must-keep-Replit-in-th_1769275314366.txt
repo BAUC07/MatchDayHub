@@ -1,0 +1,67 @@
+Ok. Given the constraint that you must keep Replit in the loop, the prompt needs to do two things at once:
+	1.	Remove all ambiguity about what “working” means
+	2.	Force a solution that is immune to frozen renders, even if the underlying cause is never found
+
+That means we stop asking Replit to “fix the timer” and instead tell it exactly how the UI must be driven, even if it feels inelegant.
+
+Below is the prompt I’d use. It’s prescriptive on purpose. It gives Replit a narrow lane and a high probability of success.
+
+⸻
+
+Prompt for Replit (Guaranteed-working approach)
+
+We need a solution that visually updates time on screen every second while the app is in the foreground, regardless of navigation optimisations, memoisation, or render freezing.
+
+Do not attempt to debug or optimise the existing screen further. Implement the pattern below exactly.
+
+⸻
+
+Required approach
+
+Decouple timekeeping from the screen render tree.
+	1.	Create a standalone LiveTimer child component whose only responsibility is to render elapsed time.
+	2.	LiveTimer must:
+	•	Not be wrapped in React.memo
+	•	Not depend on parent re-renders
+	•	Manage its own internal state
+	•	Be mounted directly inside the screen JSX
+	3.	Inside LiveTimer:
+	•	Store a local displayTick state that increments once per second
+	•	Use setTimeout or setInterval solely to update this local state
+	•	Calculate elapsed time from startTimestamp on each render
+	•	Render the calculated value directly in JSX
+
+Example structure (pattern, not exact code):
+	•	startTimestamp passed in once as a prop
+	•	displayTick increments every second to force re-render
+	•	Elapsed time = Date.now() - startTimestamp
+
+This ensures:
+	•	Accurate time (timestamp-based)
+	•	Guaranteed re-renders (local state updates)
+	•	No reliance on parent navigation renders
+
+⸻
+
+Validation requirements
+
+Add the following logs:
+	•	Log inside LiveTimer render body
+	•	Log inside the timer callback
+
+Expected result:
+	•	Render log fires once per second while app remains open
+	•	Number visually increments once per second
+	•	No app switching required
+
+⸻
+
+Acceptance criteria
+
+This is considered complete only when:
+	•	The timer visibly counts up once per second
+	•	While the app remains in the foreground
+	•	Without relying on AppState, focus changes, or navigation events
+	•	On a physical iOS device via Expo Go
+
+If this pattern does not work, the issue is confirmed to be outside the screen code and should be reported explicitly rather than iterating further.
