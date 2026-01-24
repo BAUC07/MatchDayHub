@@ -47,49 +47,35 @@ interface LiveTimerProps {
 }
 
 function LiveTimer({ 
-  startTimestamp, 
+  startTimestamp: startTimestampProp, 
   isRunning, 
   baseTime, 
   plannedDuration, 
   isSecondHalf, 
   firstHalfAddedTime 
 }: LiveTimerProps) {
-  // Local state that forces re-renders - completely isolated from parent
-  const [displayTick, setDisplayTick] = useState(0);
+  // Counter to force component re-renders every second (value unused but state change triggers re-render)
+  const [, setTick] = useState(0);
   
-  // Log on every render to verify this component is re-rendering
-  console.log('[LiveTimer] Render, displayTick:', displayTick, 'isRunning:', isRunning);
-  
-  // Timer that updates local state every second
+  // Timer that updates state every second to force re-renders and recalculate elapsed time
   useEffect(() => {
     if (isRunning) {
-      console.log('[LiveTimer] Starting interval');
       const id = setInterval(() => {
-        setDisplayTick(prev => {
-          const newTick = prev + 1;
-          console.log('[LiveTimer] Tick callback fired, newTick:', newTick);
-          return newTick;
-        });
+        setTick(prev => prev + 1);
       }, 1000);
-      
-      return () => {
-        console.log('[LiveTimer] Clearing interval');
-        clearInterval(id);
-      };
+      return () => clearInterval(id);
     }
-  }, [isRunning]);
+  }, [isRunning, startTimestampProp]);
   
   // Calculate elapsed time from timestamp on each render
-  const getElapsedSeconds = (): number => {
-    if (!isRunning || !startTimestamp) {
-      return baseTime;
-    }
-    const now = Date.now();
-    const elapsed = Math.floor((now - startTimestamp) / 1000);
-    return baseTime + elapsed;
-  };
-  
-  const matchTime = getElapsedSeconds();
+  const now = Date.now();
+  let matchTime: number;
+  if (!isRunning || !startTimestampProp) {
+    matchTime = baseTime;
+  } else {
+    const elapsed = Math.floor((now - startTimestampProp) / 1000);
+    matchTime = baseTime + elapsed;
+  }
   const halfDuration = plannedDuration / 2;
   const halfMins = Math.floor(halfDuration / 60);
   const fullMins = Math.floor(plannedDuration / 60);
@@ -139,10 +125,6 @@ function LiveTimer({
           {addedDisplay}
         </ThemedText>
       ) : null}
-      {/* Debug: show raw tick to prove re-renders */}
-      <ThemedText type="small" style={{ color: '#ff0', marginLeft: 8 }}>
-        [t:{displayTick}]
-      </ThemedText>
     </View>
   );
 }
@@ -229,10 +211,11 @@ export default function LiveMatchScreen() {
   const [team, setTeam] = useState<Team | null>(null);
   const [loading, setLoading] = useState(true);
   const [isRunning, setIsRunning] = useState(false);
-  const [matchTime, setMatchTime] = useState(0);
+  const [baseTime, setBaseTime] = useState(0); // Accumulated time when timer was last stopped
+  const [timerStartTimestamp, setTimerStartTimestamp] = useState<number | null>(null); // When timer was started (state, not ref)
   
-  // Debug: Log on every render to verify React reconciliation is happening
-  console.log('[Render] LiveMatchScreen rendered, matchTime:', matchTime);
+  // Debug: Log on every render
+  console.log('[Render] LiveMatchScreen rendered, isRunning:', isRunning, 'baseTime:', baseTime, 'startTimestamp:', timerStartTimestamp);
   
   const [showActionSheet, setShowActionSheet] = useState(false);
   const [currentAction, setCurrentAction] = useState<ActionType | null>(null);
@@ -246,10 +229,7 @@ export default function LiveMatchScreen() {
   const [playerPositions, setPlayerPositions] = useState<PlayerPosition[]>([]);
   const [pitchDimensions, setPitchDimensions] = useState({ width: 0, height: 0 });
 
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastSaveRef = useRef<number>(0);
-  const timerStartRef = useRef<number | null>(null);
-  const accumulatedTimeRef = useRef<number>(0);
 
   const loadData = useCallback(async () => {
     try {
@@ -261,18 +241,14 @@ export default function LiveMatchScreen() {
         setFirstHalfAddedTime(matchData.firstHalfAddedTime || 0);
         setSecondHalfAddedTime(matchData.secondHalfAddedTime || 0);
         
-        // Restore timer state - if timer was running, calculate current time from timestamp
+        // Restore timer state - if timer was running, restore using state
         if (matchData.timerStartTimestamp && !matchData.isHalfTime && !matchData.isCompleted) {
-          const now = Date.now();
-          const elapsed = Math.floor((now - matchData.timerStartTimestamp) / 1000);
-          const totalTime = (matchData.accumulatedTime || 0) + elapsed;
-          setMatchTime(totalTime);
-          accumulatedTimeRef.current = matchData.accumulatedTime || 0;
-          timerStartRef.current = matchData.timerStartTimestamp;
+          setBaseTime(matchData.accumulatedTime || 0);
+          setTimerStartTimestamp(matchData.timerStartTimestamp);
           setIsRunning(true);
         } else {
-          setMatchTime(matchData.totalMatchTime);
-          accumulatedTimeRef.current = matchData.totalMatchTime;
+          setBaseTime(matchData.totalMatchTime || 0);
+          setTimerStartTimestamp(null);
         }
         
         const teamData = await getTeam(matchData.teamId);
@@ -289,176 +265,111 @@ export default function LiveMatchScreen() {
     loadData();
   }, [loadData]);
 
-  // Simple timer: increment state by 1 every second using functional setState
-  // This guarantees a new value each tick, forcing React to re-render
-  useEffect(() => {
-    if (isRunning) {
-      // Record start timestamp for background restoration
-      if (!timerStartRef.current) {
-        timerStartRef.current = Date.now();
-      }
-      
-      // Recursive setTimeout - calls setMatchTime(prev => prev + 1) every second
-      let timeoutId: ReturnType<typeof setTimeout>;
-      
-      const tick = () => {
-        setMatchTime(prev => {
-          const newValue = prev + 1;
-          console.log('[Timer] setState called, new value:', newValue);
-          return newValue;
-        });
-        timeoutId = setTimeout(tick, 1000);
-      };
-      
-      // Start the first tick after 1 second
-      timeoutId = setTimeout(tick, 1000);
-      
-      return () => {
-        clearTimeout(timeoutId);
-      };
-    } else {
-      // When stopping, save accumulated time to ref for later restoration
-      accumulatedTimeRef.current = matchTime;
-      timerStartRef.current = null;
+  // Timer display is now handled by LiveTimer component - no need for parent timer effect
+  // LiveTimer manages its own re-renders and calculates time from startTimestamp
+
+  // Helper to calculate current match time
+  const getCurrentMatchTime = useCallback(() => {
+    if (!isRunning || !timerStartTimestamp) {
+      return baseTime;
     }
-  }, [isRunning]);
-
-  // AppState listener to recalculate time when app returns to foreground
-  useEffect(() => {
-    const handleAppStateChange = (nextAppState: AppStateStatus) => {
-      if (nextAppState === 'active' && isRunning && timerStartRef.current) {
-        // Recalculate time when app becomes active
-        const now = Date.now();
-        const elapsed = Math.floor((now - timerStartRef.current) / 1000);
-        setMatchTime(accumulatedTimeRef.current + elapsed);
-      }
-    };
-
-    const subscription = AppState.addEventListener('change', handleAppStateChange);
-    return () => subscription.remove();
-  }, [isRunning]);
+    const elapsed = Math.floor((Date.now() - timerStartTimestamp) / 1000);
+    return baseTime + elapsed;
+  }, [isRunning, timerStartTimestamp, baseTime]);
 
   useEffect(() => {
     const now = Date.now();
     if (match && now - lastSaveRef.current > 5000) {
       lastSaveRef.current = now;
+      const currentTime = getCurrentMatchTime();
       const updatedMatch = {
         ...match,
-        totalMatchTime: matchTime,
+        totalMatchTime: currentTime,
         isHalfTime,
         halfTimeTriggered: isSecondHalf,
         firstHalfAddedTime,
         secondHalfAddedTime,
-        timerStartTimestamp: isRunning && timerStartRef.current ? timerStartRef.current : undefined,
-        accumulatedTime: accumulatedTimeRef.current,
+        timerStartTimestamp: isRunning && timerStartTimestamp ? timerStartTimestamp : undefined,
+        accumulatedTime: baseTime,
       };
       saveMatch(updatedMatch);
     }
-  }, [matchTime, match, isHalfTime, isSecondHalf, firstHalfAddedTime, secondHalfAddedTime, isRunning]);
+  }, [baseTime, timerStartTimestamp, match, isHalfTime, isSecondHalf, firstHalfAddedTime, secondHalfAddedTime, isRunning, getCurrentMatchTime]);
 
   const plannedDuration = (match?.plannedDuration || 60) * 60;
   const halfDuration = plannedDuration / 2;
 
-  const getTimeDisplay = useCallback(() => {
-    if (!match) return { main: "00:00", added: "" };
-    
-    const halfMins = Math.floor(halfDuration / 60);
-    const fullMins = Math.floor(plannedDuration / 60);
-    
-    if (!isSecondHalf) {
-      if (matchTime <= halfDuration) {
-        return { main: formatMatchTime(matchTime), added: "" };
-      } else {
-        const addedSecs = matchTime - halfDuration;
-        const addedMins = Math.floor(addedSecs / 60);
-        const addedRemSecs = addedSecs % 60;
-        return { 
-          main: `${halfMins}'`, 
-          added: `+${addedMins}:${addedRemSecs.toString().padStart(2, "0")}` 
-        };
-      }
-    } else {
-      const secondHalfTime = matchTime - halfDuration - firstHalfAddedTime;
-      const displayTime = halfDuration + secondHalfTime;
-      
-      if (displayTime <= plannedDuration) {
-        return { main: formatMatchTime(displayTime), added: "" };
-      } else {
-        const addedSecs = displayTime - plannedDuration;
-        const addedMins = Math.floor(addedSecs / 60);
-        const addedRemSecs = addedSecs % 60;
-        return { 
-          main: `${fullMins}'`, 
-          added: `+${addedMins}:${addedRemSecs.toString().padStart(2, "0")}` 
-        };
-      }
-    }
-  }, [match, matchTime, isSecondHalf, halfDuration, plannedDuration, firstHalfAddedTime]);
+  // getTimeDisplay removed - LiveTimer component handles time display
 
   const handleToggleClock = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    
     if (isHalfTime) {
+      // Resuming from half-time into second half
+      const currentTime = getCurrentMatchTime();
       setIsHalfTime(false);
       setIsSecondHalf(true);
-      setFirstHalfAddedTime(matchTime > halfDuration ? matchTime - halfDuration : 0);
+      setFirstHalfAddedTime(currentTime > halfDuration ? currentTime - halfDuration : 0);
     }
-    setIsRunning((prev) => {
-      if (!prev) {
-        // Starting the timer - set the start timestamp
-        timerStartRef.current = Date.now();
-      } else {
-        // Stopping the timer - accumulate the elapsed time
-        if (timerStartRef.current) {
-          const elapsed = Math.floor((Date.now() - timerStartRef.current) / 1000);
-          accumulatedTimeRef.current = accumulatedTimeRef.current + elapsed;
-          timerStartRef.current = null;
-        }
+    
+    if (!isRunning) {
+      // Starting the timer
+      setTimerStartTimestamp(Date.now());
+      setIsRunning(true);
+    } else {
+      // Stopping the timer - accumulate elapsed time
+      if (timerStartTimestamp) {
+        const elapsed = Math.floor((Date.now() - timerStartTimestamp) / 1000);
+        setBaseTime(prev => prev + elapsed);
       }
-      return !prev;
-    });
-  }, [isHalfTime, matchTime, halfDuration]);
+      setTimerStartTimestamp(null);
+      setIsRunning(false);
+    }
+  }, [isHalfTime, isRunning, timerStartTimestamp, getCurrentMatchTime, halfDuration]);
 
   const handleHalfTime = useCallback(() => {
+    const currentTime = getCurrentMatchTime();
+    
     if (isHalfTime) {
       // During half time, clicking HT starts the second half
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setIsHalfTime(false);
       setIsSecondHalf(true);
-      if (matchTime > halfDuration) {
-        setFirstHalfAddedTime(matchTime - halfDuration);
+      if (currentTime > halfDuration) {
+        setFirstHalfAddedTime(currentTime - halfDuration);
       }
       // Start the timer for second half
-      timerStartRef.current = Date.now();
+      setTimerStartTimestamp(Date.now());
       setIsRunning(true);
     } else if (!isSecondHalf) {
       // During first half, trigger half time break
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       // Stop the timer and save accumulated time
-      if (timerStartRef.current) {
-        const elapsed = Math.floor((Date.now() - timerStartRef.current) / 1000);
-        accumulatedTimeRef.current = accumulatedTimeRef.current + elapsed;
-        timerStartRef.current = null;
+      if (timerStartTimestamp) {
+        const elapsed = Math.floor((Date.now() - timerStartTimestamp) / 1000);
+        setBaseTime(prev => prev + elapsed);
       }
+      setTimerStartTimestamp(null);
       setIsRunning(false);
       setIsHalfTime(true);
-      if (matchTime > halfDuration) {
-        setFirstHalfAddedTime(matchTime - halfDuration);
+      if (currentTime > halfDuration) {
+        setFirstHalfAddedTime(currentTime - halfDuration);
       }
     }
-  }, [isHalfTime, isSecondHalf, matchTime, halfDuration]);
+  }, [isHalfTime, isSecondHalf, getCurrentMatchTime, halfDuration, timerStartTimestamp]);
 
   const handlePauseLongPress = useCallback(() => {
     if (isRunning) {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
       // Stop the timer and save accumulated time
-      if (timerStartRef.current) {
-        const elapsed = Math.floor((Date.now() - timerStartRef.current) / 1000);
-        accumulatedTimeRef.current = accumulatedTimeRef.current + elapsed;
-        timerStartRef.current = null;
+      if (timerStartTimestamp) {
+        const elapsed = Math.floor((Date.now() - timerStartTimestamp) / 1000);
+        setBaseTime(prev => prev + elapsed);
       }
+      setTimerStartTimestamp(null);
       setIsRunning(false);
     }
-  }, [isRunning]);
+  }, [isRunning, timerStartTimestamp]);
 
   const openActionSheet = useCallback((action: ActionType) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -505,10 +416,11 @@ export default function LiveMatchScreen() {
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
+      const currentTime = getCurrentMatchTime();
       const newEvent: MatchEvent = {
         ...event,
         id: generateId(),
-        timestamp: matchTime,
+        timestamp: currentTime,
       };
 
       let scoreFor = match.scoreFor;
@@ -525,13 +437,13 @@ export default function LiveMatchScreen() {
         events: [...match.events, newEvent],
         scoreFor,
         scoreAgainst,
-        totalMatchTime: matchTime,
+        totalMatchTime: currentTime,
       };
 
       setMatch(updatedMatch);
       await saveMatch(updatedMatch);
     },
-    [match, matchTime]
+    [match, getCurrentMatchTime]
   );
 
   const handleGoalFor = useCallback(
@@ -652,10 +564,11 @@ export default function LiveMatchScreen() {
           ? "loss"
           : "draw";
 
+    const currentTime = getCurrentMatchTime();
     const updatedMatch: Match = {
       ...match,
       isCompleted: true,
-      totalMatchTime: matchTime,
+      totalMatchTime: currentTime,
     };
 
     const updatedTeam: Team = {
@@ -674,7 +587,7 @@ export default function LiveMatchScreen() {
     } catch (error) {
       console.error("Error ending match:", error);
     }
-  }, [match, team, matchTime, navigation]);
+  }, [match, team, getCurrentMatchTime, navigation]);
 
   const undoLastEvent = useCallback(() => {
     if (!match || match.events.length === 0) return;
@@ -819,9 +732,9 @@ export default function LiveMatchScreen() {
 
       <View style={styles.clockSection}>
         <LiveTimer
-          startTimestamp={timerStartRef.current}
+          startTimestamp={timerStartTimestamp}
           isRunning={isRunning}
-          baseTime={accumulatedTimeRef.current}
+          baseTime={baseTime}
           plannedDuration={(match?.plannedDuration || 60) * 60}
           isSecondHalf={isSecondHalf}
           firstHalfAddedTime={firstHalfAddedTime}

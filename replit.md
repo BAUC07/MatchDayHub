@@ -171,6 +171,7 @@ server/
 - RevenueCat integration still in place for future use when purchases are ready
 - Removed "Priority Support" from Elite features list
 - Fixed timer reliability on iOS (uses setInterval with timestamp-based timing that survives app backgrounding)
+- Fixed iOS timer visual update issue (LiveTimer uses isolated tick state to force re-renders, calculates elapsed from timestamp prop on each render)
 - Added date range filtering on Stats tab (defaults to current football season starting Aug 1)
 - Rebranded subscription tier from "Premium" to "Elite" throughout app
 - Added PDF export for team statistics (generates professional PDF with results, goals, scorers)
