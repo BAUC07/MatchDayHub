@@ -222,6 +222,8 @@ export default function LiveMatchScreen() {
   const [showTimeline, setShowTimeline] = useState(false);
   const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
   const [showEndConfirm, setShowEndConfirm] = useState(false);
+  const [showSecondYellowConfirm, setShowSecondYellowConfirm] = useState(false);
+  const [pendingSecondYellowPlayer, setPendingSecondYellowPlayer] = useState<Player | null>(null);
   const [isHalfTime, setIsHalfTime] = useState(false);
   const [isSecondHalf, setIsSecondHalf] = useState(false);
   const [firstHalfAddedTime, setFirstHalfAddedTime] = useState(0);
@@ -378,9 +380,30 @@ export default function LiveMatchScreen() {
     setShowActionSheet(true);
   }, []);
 
+  const getSentOffPlayerIds = useCallback(() => {
+    if (!match) return new Set<string>();
+    const sentOffIds = new Set<string>();
+    
+    match.events
+      .filter((e) => e.type === "card" && e.cardType === "red" && e.playerId)
+      .forEach((e) => {
+        if (e.playerId) sentOffIds.add(e.playerId);
+      });
+    
+    return sentOffIds;
+  }, [match]);
+
+  const getPlayerYellowCardCount = useCallback((playerId: string) => {
+    if (!match) return 0;
+    return match.events.filter(
+      (e) => e.type === "card" && e.cardType === "yellow" && e.playerId === playerId
+    ).length;
+  }, [match]);
+
   const getPlayersOnPitch = useCallback(() => {
     if (!team || !match) return [];
     const onPitchIds = new Set(match.startingLineup);
+    const sentOffIds = getSentOffPlayerIds();
 
     match.events
       .filter((e) => e.type === "substitution")
@@ -389,12 +412,13 @@ export default function LiveMatchScreen() {
         if (e.playerOnId) onPitchIds.add(e.playerOnId);
       });
 
-    return team.players.filter((p) => onPitchIds.has(p.id));
-  }, [team, match]);
+    return team.players.filter((p) => onPitchIds.has(p.id) && !sentOffIds.has(p.id));
+  }, [team, match, getSentOffPlayerIds]);
 
   const getSubstitutes = useCallback(() => {
     if (!team || !match) return [];
     const onPitchIds = new Set(match.startingLineup);
+    const sentOffIds = getSentOffPlayerIds();
 
     match.events
       .filter((e) => e.type === "substitution")
@@ -404,11 +428,18 @@ export default function LiveMatchScreen() {
       });
 
     // Include both original subs AND players who were subbed off (now available again)
+    // Exclude sent-off players
     const availablePlayerIds = new Set([...match.substitutes, ...match.startingLineup]);
     return team.players.filter(
-      (p) => !onPitchIds.has(p.id) && availablePlayerIds.has(p.id)
+      (p) => !onPitchIds.has(p.id) && availablePlayerIds.has(p.id) && !sentOffIds.has(p.id)
     );
-  }, [team, match]);
+  }, [team, match, getSentOffPlayerIds]);
+
+  const getSentOffPlayers = useCallback(() => {
+    if (!team || !match) return [];
+    const sentOffIds = getSentOffPlayerIds();
+    return team.players.filter((p) => sentOffIds.has(p.id));
+  }, [team, match, getSentOffPlayerIds]);
 
   const addEvent = useCallback(
     async (event: Omit<MatchEvent, "id" | "timestamp">) => {
@@ -472,6 +503,18 @@ export default function LiveMatchScreen() {
 
   const handleCard = useCallback(
     async (player: Player, cardType: CardType) => {
+      // Check if this is a second yellow card
+      if (cardType === "yellow") {
+        const yellowCount = getPlayerYellowCardCount(player.id);
+        if (yellowCount >= 1) {
+          // This is a second yellow - show confirmation
+          setPendingSecondYellowPlayer(player);
+          setShowActionSheet(false);
+          setShowSecondYellowConfirm(true);
+          return;
+        }
+      }
+      
       await addEvent({
         type: "card",
         playerId: player.id,
@@ -479,8 +522,35 @@ export default function LiveMatchScreen() {
       });
       setShowActionSheet(false);
     },
-    [addEvent]
+    [addEvent, getPlayerYellowCardCount]
   );
+
+  const confirmSecondYellow = useCallback(async () => {
+    if (!pendingSecondYellowPlayer) return;
+    
+    // Log the second yellow card
+    await addEvent({
+      type: "card",
+      playerId: pendingSecondYellowPlayer.id,
+      cardType: "yellow",
+    });
+    
+    // Log the red card (sent off)
+    await addEvent({
+      type: "card",
+      playerId: pendingSecondYellowPlayer.id,
+      cardType: "red",
+    });
+    
+    setPendingSecondYellowPlayer(null);
+    setShowSecondYellowConfirm(false);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+  }, [pendingSecondYellowPlayer, addEvent]);
+
+  const cancelSecondYellow = useCallback(() => {
+    setPendingSecondYellowPlayer(null);
+    setShowSecondYellowConfirm(false);
+  }, []);
 
   const handleSubstitution = useCallback(
     async (playerOff: Player, playerOn: Player) => {
