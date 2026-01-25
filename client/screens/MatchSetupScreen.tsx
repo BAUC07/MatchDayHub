@@ -52,10 +52,11 @@ interface DraggablePlayerProps {
   status: PlayerStatus;
   onDrop: (playerId: string, targetStatus: PlayerStatus) => void;
   onTap: (playerId: string) => void;
+  onLongPress: (playerId: string) => void;
   columnLayouts: React.MutableRefObject<ColumnLayouts>;
 }
 
-function DraggablePlayer({ player, status, onDrop, onTap, columnLayouts }: DraggablePlayerProps) {
+function DraggablePlayer({ player, status, onDrop, onTap, onLongPress, columnLayouts }: DraggablePlayerProps) {
   const translateX = useSharedValue(0);
   const translateY = useSharedValue(0);
   const scale = useSharedValue(1);
@@ -106,7 +107,13 @@ function DraggablePlayer({ player, status, onDrop, onTap, columnLayouts }: Dragg
     runOnJS(onTap)(player.id);
   });
 
-  const composed = Gesture.Race(gesture, tap);
+  const longPress = Gesture.LongPress()
+    .minDuration(500)
+    .onEnd(() => {
+      runOnJS(onLongPress)(player.id);
+    });
+
+  const composed = Gesture.Race(gesture, Gesture.Exclusive(longPress, tap));
 
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [
@@ -529,6 +536,7 @@ export default function MatchSetupScreen() {
                   status="starting"
                   onDrop={handleDrop}
                   onTap={handleTap}
+                  onLongPress={handleLongPress}
                   columnLayouts={columnLayouts}
                 />
               ))}
@@ -566,6 +574,7 @@ export default function MatchSetupScreen() {
                   status="bench"
                   onDrop={handleDrop}
                   onTap={handleTap}
+                  onLongPress={handleLongPress}
                   columnLayouts={columnLayouts}
                 />
               ))}
@@ -599,6 +608,7 @@ export default function MatchSetupScreen() {
                 status="unavailable"
                 onDrop={handleDrop}
                 onTap={handleTap}
+                onLongPress={handleLongPress}
                 columnLayouts={columnLayouts}
               />
             ))}
