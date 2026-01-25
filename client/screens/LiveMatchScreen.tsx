@@ -695,6 +695,7 @@ export default function LiveMatchScreen() {
 
   const playersOnPitch = getPlayersOnPitch();
   const substitutes = getSubstitutes();
+  const sentOffPlayers = getSentOffPlayers();
 
   const getDefaultPosition = useCallback((index: number, totalPlayers: number): { x: number; y: number } => {
     const cols = 4;
@@ -908,6 +909,28 @@ export default function LiveMatchScreen() {
             }
           />
         </View>
+
+        {sentOffPlayers.length > 0 ? (
+          <View style={styles.sentOffContainer}>
+            <ThemedText type="small" style={styles.sentOffLabel}>
+              SENT OFF
+            </ThemedText>
+            <FlatList
+              horizontal
+              data={sentOffPlayers}
+              keyExtractor={(item) => item.id}
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.sentOffList}
+              renderItem={({ item }) => (
+                <View style={styles.sentOffPlayer}>
+                  <ThemedText type="small" style={styles.sentOffPlayerText}>
+                    {getPlayerDisplayName(item)}
+                  </ThemedText>
+                </View>
+              )}
+            />
+          </View>
+        ) : null}
       </View>
 
       <View style={[styles.bottomBar, { paddingBottom: insets.bottom + Spacing.sm }]}>
@@ -1029,6 +1052,31 @@ export default function LiveMatchScreen() {
               </Pressable>
               <Pressable style={confirmStyles.confirmButton} onPress={confirmEndMatch}>
                 <ThemedText type="body" style={confirmStyles.confirmText}>Yes, End Game</ThemedText>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={showSecondYellowConfirm} transparent animationType="fade" onRequestClose={cancelSecondYellow}>
+        <View style={confirmStyles.overlay}>
+          <View style={confirmStyles.dialog}>
+            <View style={confirmStyles.cardIconsRow}>
+              <View style={[confirmStyles.cardIcon, { backgroundColor: AppColors.warningYellow }]} />
+              <View style={[confirmStyles.cardIcon, { backgroundColor: AppColors.warningYellow }]} />
+              <ThemedText type="h4" style={{ marginLeft: Spacing.sm }}>=</ThemedText>
+              <View style={[confirmStyles.cardIcon, { backgroundColor: AppColors.redCard, marginLeft: Spacing.sm }]} />
+            </View>
+            <ThemedText type="h4" style={confirmStyles.title}>Second Yellow Card</ThemedText>
+            <ThemedText type="body" style={confirmStyles.message}>
+              {pendingSecondYellowPlayer?.name} already has a yellow card. A second yellow means a red card and they will be sent off.
+            </ThemedText>
+            <View style={confirmStyles.buttons}>
+              <Pressable style={confirmStyles.cancelButton} onPress={cancelSecondYellow}>
+                <ThemedText type="body" style={confirmStyles.cancelText}>Cancel</ThemedText>
+              </Pressable>
+              <Pressable style={[confirmStyles.confirmButton, { backgroundColor: AppColors.warningYellow }]} onPress={confirmSecondYellow}>
+                <ThemedText type="body" style={[confirmStyles.confirmText, { color: "#000" }]}>Confirm Second Yellow</ThemedText>
               </Pressable>
             </View>
           </View>
@@ -1496,6 +1544,11 @@ const styles = StyleSheet.create({
   benchList: { gap: Spacing.sm },
   benchPlayer: { backgroundColor: AppColors.elevated, paddingVertical: Spacing.xs, paddingHorizontal: Spacing.md, borderRadius: BorderRadius.xs },
   benchPlayerText: { color: AppColors.textSecondary },
+  sentOffContainer: { marginTop: Spacing.sm },
+  sentOffLabel: { color: AppColors.redCard, fontWeight: "600", marginBottom: Spacing.xs },
+  sentOffList: { gap: Spacing.sm },
+  sentOffPlayer: { backgroundColor: AppColors.redCard, paddingVertical: Spacing.xs, paddingHorizontal: Spacing.md, borderRadius: BorderRadius.xs },
+  sentOffPlayerText: { color: "#FFFFFF", fontWeight: "600" },
   bottomBar: { paddingHorizontal: Spacing.md, paddingTop: Spacing.sm, gap: Spacing.sm },
   actionButtonsRow: { flexDirection: "row", gap: Spacing.sm },
   actionButton: { flex: 1, height: Spacing.actionButtonHeight, borderRadius: BorderRadius.xs, justifyContent: "center", alignItems: "center" },
@@ -1545,6 +1598,8 @@ const sheetStyles = StyleSheet.create({
 const confirmStyles = StyleSheet.create({
   overlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.7)", justifyContent: "center", alignItems: "center", padding: Spacing.xl },
   dialog: { backgroundColor: AppColors.surface, borderRadius: BorderRadius.lg, padding: Spacing.xl, width: "100%", maxWidth: 320 },
+  cardIconsRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", marginBottom: Spacing.md },
+  cardIcon: { width: 24, height: 32, borderRadius: 3, marginHorizontal: 4 },
   title: { textAlign: "center", marginBottom: Spacing.md },
   message: { textAlign: "center", color: AppColors.textSecondary, marginBottom: Spacing.xl },
   buttons: { flexDirection: "row", gap: Spacing.md },
