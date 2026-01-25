@@ -51,6 +51,7 @@ export interface Match {
   date: string;
   startingLineup: string[]; // player IDs
   substitutes: string[]; // player IDs
+  unavailablePlayers?: string[]; // player IDs - not available for this match
   events: MatchEvent[];
   scoreFor: number;
   scoreAgainst: number;

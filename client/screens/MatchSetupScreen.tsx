@@ -33,7 +33,7 @@ import { RootStackParamList } from "@/navigation/RootStackNavigator";
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 type MatchSetupRouteProp = RouteProp<RootStackParamList, "MatchSetup">;
 
-type PlayerStatus = "starting" | "bench" | "notPlaying";
+type PlayerStatus = "starting" | "bench" | "unavailable";
 
 const FORMATS: MatchFormat[] = ["5v5", "7v7", "9v9", "11v11"];
 const LOCATIONS: { key: MatchLocation; label: string }[] = [
@@ -41,12 +41,18 @@ const LOCATIONS: { key: MatchLocation; label: string }[] = [
   { key: "away", label: "Away" },
 ];
 
+interface ColumnLayouts {
+  starting: LayoutRectangle | null;
+  bench: LayoutRectangle | null;
+  unavailable: LayoutRectangle | null;
+}
+
 interface DraggablePlayerProps {
   player: Player;
   status: PlayerStatus;
   onDrop: (playerId: string, targetStatus: PlayerStatus) => void;
   onTap: (playerId: string) => void;
-  columnLayouts: React.MutableRefObject<{ starting: LayoutRectangle | null; bench: LayoutRectangle | null }>;
+  columnLayouts: React.MutableRefObject<ColumnLayouts>;
 }
 
 function DraggablePlayer({ player, status, onDrop, onTap, columnLayouts }: DraggablePlayerProps) {
@@ -60,12 +66,15 @@ function DraggablePlayer({ player, status, onDrop, onTap, columnLayouts }: Dragg
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
   };
 
-  const handleDrop = (playerId: string, x: number) => {
+  const handleDrop = (playerId: string, x: number, y: number, absoluteY: number) => {
     const startingLayout = columnLayouts.current.starting;
     const benchLayout = columnLayouts.current.bench;
+    const unavailableLayout = columnLayouts.current.unavailable;
     
     if (startingLayout && x < startingLayout.width + 20) {
       onDrop(playerId, "starting");
+    } else if (unavailableLayout && absoluteY > unavailableLayout.y) {
+      onDrop(playerId, "unavailable");
     } else if (benchLayout) {
       onDrop(playerId, "bench");
     }
@@ -87,8 +96,7 @@ function DraggablePlayer({ player, status, onDrop, onTap, columnLayouts }: Dragg
       scale.value = withSpring(1);
       zIndex.value = 0;
       
-      const finalX = event.absoluteX;
-      runOnJS(handleDrop)(player.id, finalX);
+      runOnJS(handleDrop)(player.id, event.absoluteX, event.translationY, event.absoluteY);
       
       translateX.value = withSpring(0);
       translateY.value = withSpring(0);
@@ -115,9 +123,9 @@ function DraggablePlayer({ player, status, onDrop, onTap, columnLayouts }: Dragg
   
   if (status === "bench") {
     bgColor = "#2196F3";
-  } else if (status === "notPlaying") {
+  } else if (status === "unavailable") {
     bgColor = AppColors.elevated;
-    textColor = AppColors.textSecondary;
+    textColor = AppColors.textDisabled;
   }
 
   return (
@@ -165,9 +173,10 @@ export default function MatchSetupScreen() {
   const [newPlayerName, setNewPlayerName] = useState("");
   const [newPlayerNumber, setNewPlayerNumber] = useState("");
 
-  const columnLayouts = useRef<{ starting: LayoutRectangle | null; bench: LayoutRectangle | null }>({
+  const columnLayouts = useRef<ColumnLayouts>({
     starting: null,
     bench: null,
+    unavailable: null,
   });
 
   const loadTeam = useCallback(async () => {
@@ -176,8 +185,13 @@ export default function MatchSetupScreen() {
       if (teamData) {
         setTeam(teamData);
         const initialStatuses: Record<string, PlayerStatus> = {};
-        teamData.players.forEach((p) => {
-          initialStatuses[p.id] = "bench";
+        const maxStarting = getMaxPlayers(format);
+        teamData.players.forEach((p, index) => {
+          if (index < maxStarting) {
+            initialStatuses[p.id] = "starting";
+          } else {
+            initialStatuses[p.id] = "bench";
+          }
         });
         setPlayerStatuses(initialStatuses);
       }
@@ -186,7 +200,7 @@ export default function MatchSetupScreen() {
     } finally {
       setLoading(false);
     }
-  }, [route.params.teamId]);
+  }, [route.params.teamId, format]);
 
   useFocusEffect(
     useCallback(() => {
@@ -224,7 +238,7 @@ export default function MatchSetupScreen() {
   const allPlayers = team?.players || [];
   const startingPlayers = allPlayers.filter((p) => playerStatuses[p.id] === "starting");
   const benchPlayers = allPlayers.filter((p) => playerStatuses[p.id] === "bench");
-  const notPlayingPlayers = allPlayers.filter((p) => playerStatuses[p.id] === "notPlaying");
+  const unavailablePlayers = allPlayers.filter((p) => playerStatuses[p.id] === "unavailable");
 
   const getMaxPlayers = (f: MatchFormat) => {
     switch (f) {
@@ -256,6 +270,18 @@ export default function MatchSetupScreen() {
     });
   }, [maxPlayers]);
 
+  const handleLongPress = useCallback((playerId: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setPlayerStatuses((prev) => {
+      const current = prev[playerId] || "bench";
+      if (current === "unavailable") {
+        return { ...prev, [playerId]: "bench" };
+      } else {
+        return { ...prev, [playerId]: "unavailable" };
+      }
+    });
+  }, []);
+
   const handleTap = useCallback((playerId: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setPlayerStatuses((prev) => {
@@ -267,8 +293,7 @@ export default function MatchSetupScreen() {
         if (currentStarting < maxPlayers) {
           next = "starting";
         } else {
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-          return prev;
+          next = "unavailable";
         }
       } else if (current === "starting") {
         next = "bench";
@@ -296,6 +321,7 @@ export default function MatchSetupScreen() {
         date: new Date().toISOString(),
         startingLineup: startingPlayers.map((p) => p.id),
         substitutes: benchPlayers.map((p) => p.id),
+        unavailablePlayers: unavailablePlayers.map((p) => p.id),
         events: [],
         scoreFor: 0,
         scoreAgainst: 0,
@@ -545,34 +571,46 @@ export default function MatchSetupScreen() {
               ))}
             </View>
 
-            {notPlayingPlayers.length > 0 ? (
-              <>
-                <View style={[styles.columnHeader, { marginTop: Spacing.lg }]}>
-                  <Feather name="x" size={18} color={AppColors.textSecondary} />
-                  <ThemedText type="body" style={{ color: AppColors.textSecondary }}>
-                    Not Playing
-                  </ThemedText>
-                  <ThemedText type="caption" style={styles.countBadge}>
-                    {notPlayingPlayers.length}
-                  </ThemedText>
-                </View>
-                <View style={styles.playersList}>
-                  {notPlayingPlayers.map((p) => (
-                    <DraggablePlayer
-                      key={p.id}
-                      player={p}
-                      status="notPlaying"
-                      onDrop={handleDrop}
-                      onTap={handleTap}
-                      columnLayouts={columnLayouts}
-                    />
-                  ))}
-                </View>
-              </>
-            ) : null}
           </View>
         </View>
       ) : null}
+
+      <View
+        style={styles.unavailableSection}
+        onLayout={(e) => {
+          columnLayouts.current.unavailable = e.nativeEvent.layout;
+        }}
+      >
+        <View style={styles.columnHeader}>
+          <Feather name="x-circle" size={18} color={AppColors.textDisabled} />
+          <ThemedText type="body" style={{ color: AppColors.textDisabled }}>
+            Unavailable
+          </ThemedText>
+          <ThemedText type="caption" style={styles.countBadge}>
+            {unavailablePlayers.length}
+          </ThemedText>
+        </View>
+        {unavailablePlayers.length > 0 ? (
+          <View style={styles.playersList}>
+            {unavailablePlayers.map((p) => (
+              <DraggablePlayer
+                key={p.id}
+                player={p}
+                status="unavailable"
+                onDrop={handleDrop}
+                onTap={handleTap}
+                columnLayouts={columnLayouts}
+              />
+            ))}
+          </View>
+        ) : (
+          <View style={styles.unavailableEmpty}>
+            <ThemedText type="small" style={{ color: AppColors.textDisabled }}>
+              Drag players here if not available
+            </ThemedText>
+          </View>
+        )}
+      </View>
 
       <Card elevation={2} style={styles.addPlayerCard}>
         <ThemedText type="small" style={styles.addPlayerTitle}>
@@ -772,6 +810,21 @@ const styles = StyleSheet.create({
     borderColor: AppColors.pitchGreen,
     borderStyle: "dashed",
     gap: Spacing.sm,
+  },
+  unavailableSection: {
+    marginTop: Spacing.lg,
+    paddingTop: Spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: AppColors.elevated,
+  },
+  unavailableEmpty: {
+    padding: Spacing.md,
+    alignItems: "center",
+    backgroundColor: AppColors.surface,
+    borderRadius: BorderRadius.sm,
+    borderWidth: 1,
+    borderColor: AppColors.elevated,
+    borderStyle: "dashed",
   },
   emptyCard: {
     padding: Spacing.xl,
