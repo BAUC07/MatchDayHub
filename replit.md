@@ -163,6 +163,12 @@ server/
 - Haptic feedback on all interactions
 
 ## Recent Changes
+- Implemented complete red card management system:
+  - Second yellow card detection with visual confirmation modal (yellow + yellow = red)
+  - Automatic logging of both second yellow AND red card events
+  - "Sent Off" section on Live Match screen displays red-carded players
+  - Sent-off players automatically removed from pitch and excluded from available actions
+  - Helper functions: getSentOffPlayerIds(), getPlayerYellowCardCount(), getSentOffPlayers()
 - Enhanced Match Summary screen with event filtering, share image feature, player time breakdown, HT indicators
 - Added Manage Teams mode with archive/delete functionality (custom modals for cross-platform compatibility)
 - Archived teams hidden from Teams list but remain accessible in Stats with "(Archived)" suffix

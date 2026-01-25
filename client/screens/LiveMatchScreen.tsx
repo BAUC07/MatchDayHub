@@ -526,26 +526,41 @@ export default function LiveMatchScreen() {
   );
 
   const confirmSecondYellow = useCallback(async () => {
-    if (!pendingSecondYellowPlayer) return;
+    if (!pendingSecondYellowPlayer || !match) return;
     
-    // Log the second yellow card
-    await addEvent({
+    const currentTime = getCurrentMatchTime();
+    
+    // Create both events with the same timestamp
+    const yellowEvent: MatchEvent = {
+      id: generateId(),
       type: "card",
+      timestamp: currentTime,
       playerId: pendingSecondYellowPlayer.id,
       cardType: "yellow",
-    });
+    };
     
-    // Log the red card (sent off)
-    await addEvent({
+    const redEvent: MatchEvent = {
+      id: generateId(),
       type: "card",
+      timestamp: currentTime,
       playerId: pendingSecondYellowPlayer.id,
       cardType: "red",
-    });
+    };
+    
+    // Add both events in a single update to ensure state consistency
+    const updatedMatch = {
+      ...match,
+      events: [...match.events, yellowEvent, redEvent],
+      totalMatchTime: currentTime,
+    };
+    
+    setMatch(updatedMatch);
+    await saveMatch(updatedMatch);
     
     setPendingSecondYellowPlayer(null);
     setShowSecondYellowConfirm(false);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-  }, [pendingSecondYellowPlayer, addEvent]);
+  }, [pendingSecondYellowPlayer, match, getCurrentMatchTime]);
 
   const cancelSecondYellow = useCallback(() => {
     setPendingSecondYellowPlayer(null);
