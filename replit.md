@@ -163,6 +163,9 @@ server/
 - Haptic feedback on all interactions
 
 ## Recent Changes
+- Enhanced Match Summary screen with event filtering, share image feature, player time breakdown, HT indicators
+- Added Manage Teams mode with archive/delete functionality (custom modals for cross-platform compatibility)
+- Archived teams hidden from Teams list but remain accessible in Stats with "(Archived)" suffix
 - Added swipe-to-delete for matches in Match History (swipe left, tap Delete, confirm)
 - Fixed half-time button transition: now shows "HT" → "2nd" → "END" through match phases
 - Replaced RevenueCat paywall with code-based unlock system (code: MATCHDAYFEB2026)
