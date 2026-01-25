@@ -49,9 +49,14 @@ MVP complete with core functionality:
 
 ### Match Setup
 - Opposition name, location (home/away), format (5v5 to 11v11)
-- **Lineup Selection**: Tap players to add to starting lineup
+- **Auto-populated Lineup**: Starting lineup auto-filled based on format (5v5=5, 7v7=7, etc.)
+- Remaining players automatically assigned as substitutes
+- **Unavailable Players**: Mark players who can't make match day
+  - Long-press any player to mark as unavailable
+  - Tap to cycle: bench → starting (if space) → unavailable → bench
+  - Drag players between Starting, Subs, and Unavailable zones
 - Add new players directly from match setup (useful for late arrivals)
-- Auto-assigns remaining players as substitutes
+- Unavailable players excluded from match data and don't record stats
 
 ### Live Match (Critical - No Scroll)
 - Three-zone fixed layout:
@@ -163,6 +168,15 @@ server/
 - Haptic feedback on all interactions
 
 ## Recent Changes
+- Enhanced Match Setup with auto-populated lineup and unavailable player tracking:
+  - Starting lineup auto-fills based on match format (5v5=5, 7v7=7, 9v9=9, 11v11=11)
+  - Remaining players automatically assigned as substitutes
+  - "Unavailable" section for players who can't make match day
+  - Long-press any player to mark as unavailable
+  - Tap cycling: bench → starting (if space) → unavailable → bench
+  - Drag-and-drop between Starting, Subs, and Unavailable zones
+  - Match type updated with `unavailablePlayers` array field
+  - Unavailable players excluded from all stats calculations
 - Implemented complete red card management system:
   - Second yellow card detection with visual confirmation modal (yellow + yellow = red)
   - Automatic logging of both second yellow AND red card events
