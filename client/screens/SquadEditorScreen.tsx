@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect, useRef } from "react";
 import {
   View,
   StyleSheet,
@@ -7,6 +7,8 @@ import {
   FlatList,
   Alert,
   Image,
+  Modal,
+  BackHandler,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
@@ -45,6 +47,10 @@ export default function SquadEditorScreen() {
   const [editingPlayerId, setEditingPlayerId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
   const [editingNumber, setEditingNumber] = useState("");
+  const [showUnsavedModal, setShowUnsavedModal] = useState(false);
+  
+  const originalPlayersRef = useRef<Player[]>([]);
+  const originalLogoRef = useRef<string | null>(null);
 
   const loadTeam = useCallback(async () => {
     try {
@@ -53,6 +59,8 @@ export default function SquadEditorScreen() {
         setTeam(teamData);
         setPlayers(teamData.players);
         setLogoUri(teamData.logoUri || null);
+        originalPlayersRef.current = JSON.parse(JSON.stringify(teamData.players));
+        originalLogoRef.current = teamData.logoUri || null;
       }
     } catch (error) {
       console.error("Error loading team:", error);
@@ -66,6 +74,32 @@ export default function SquadEditorScreen() {
       loadTeam();
     }, [loadTeam])
   );
+
+  const hasUnsavedChanges = useCallback(() => {
+    if (logoUri !== originalLogoRef.current) return true;
+    if (players.length !== originalPlayersRef.current.length) return true;
+    
+    for (let i = 0; i < players.length; i++) {
+      const current = players[i];
+      const original = originalPlayersRef.current.find(p => p.id === current.id);
+      if (!original) return true;
+      if (current.name !== original.name || current.squadNumber !== original.squadNumber) return true;
+    }
+    return false;
+  }, [players, logoUri]);
+
+  const handleBackPress = useCallback(() => {
+    if (hasUnsavedChanges()) {
+      setShowUnsavedModal(true);
+      return true;
+    }
+    return false;
+  }, [hasUnsavedChanges]);
+
+  useEffect(() => {
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', handleBackPress);
+    return () => backHandler.remove();
+  }, [handleBackPress]);
 
   const handlePickLogo = useCallback(async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -99,8 +133,45 @@ export default function SquadEditorScreen() {
     }
   }, [team, players, saving, navigation]);
 
+  const handleHeaderBackPress = useCallback(() => {
+    if (hasUnsavedChanges()) {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      setShowUnsavedModal(true);
+    } else {
+      navigation.goBack();
+    }
+  }, [hasUnsavedChanges, navigation]);
+
+  const handleDiscardChanges = useCallback(() => {
+    setShowUnsavedModal(false);
+    navigation.goBack();
+  }, [navigation]);
+
+  const handleSaveAndExit = useCallback(async () => {
+    setShowUnsavedModal(false);
+    if (!team || saving) return;
+
+    setSaving(true);
+    try {
+      const updatedTeam = { ...team, players, logoUri: logoUri || undefined };
+      await saveTeam(updatedTeam);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      navigation.goBack();
+    } catch (error) {
+      console.error("Error saving team:", error);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    } finally {
+      setSaving(false);
+    }
+  }, [team, players, logoUri, saving, navigation]);
+
   React.useLayoutEffect(() => {
     navigation.setOptions({
+      headerLeft: () => (
+        <HeaderButton onPress={handleHeaderBackPress}>
+          <Feather name="chevron-left" size={28} color={theme.text} />
+        </HeaderButton>
+      ),
       headerRight: () => (
         <HeaderButton onPress={handleSave} disabled={saving}>
           <ThemedText
@@ -115,7 +186,7 @@ export default function SquadEditorScreen() {
         </HeaderButton>
       ),
     });
-  }, [navigation, handleSave, saving]);
+  }, [navigation, handleSave, saving, handleHeaderBackPress, theme.text]);
 
   const handleAddPlayer = useCallback(() => {
     const name = newPlayerName.trim();
@@ -378,6 +449,56 @@ export default function SquadEditorScreen() {
         }
         ItemSeparatorComponent={() => <View style={styles.separator} />}
       />
+
+      <Modal
+        visible={showUnsavedModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowUnsavedModal(false)}
+      >
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => setShowUnsavedModal(false)}
+        >
+          <View style={styles.modalContent}>
+            <View style={styles.modalIcon}>
+              <Feather name="alert-circle" size={32} color={AppColors.warningYellow} />
+            </View>
+            <ThemedText type="h4" style={styles.modalTitle}>
+              Unsaved Changes
+            </ThemedText>
+            <ThemedText type="body" style={styles.modalText}>
+              You have unsaved changes to your squad. Would you like to save them before leaving?
+            </ThemedText>
+            <View style={styles.modalButtons}>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.modalButton,
+                  styles.discardButton,
+                  { opacity: pressed ? 0.8 : 1 },
+                ]}
+                onPress={handleDiscardChanges}
+              >
+                <ThemedText type="body" style={{ color: AppColors.textSecondary }}>
+                  Discard
+                </ThemedText>
+              </Pressable>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.modalButton,
+                  styles.saveButton,
+                  { opacity: pressed ? 0.8 : 1 },
+                ]}
+                onPress={handleSaveAndExit}
+              >
+                <ThemedText type="body" style={{ color: "#FFFFFF", fontWeight: "600" }}>
+                  Save
+                </ThemedText>
+              </Pressable>
+            </View>
+          </View>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -566,5 +687,56 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingVertical: Spacing["3xl"],
     gap: Spacing.md,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.7)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: Spacing.xl,
+  },
+  modalContent: {
+    backgroundColor: AppColors.surface,
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.xl,
+    width: "100%",
+    maxWidth: 320,
+    alignItems: "center",
+  },
+  modalIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: "rgba(255, 215, 0, 0.15)",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: Spacing.lg,
+  },
+  modalTitle: {
+    textAlign: "center",
+    marginBottom: Spacing.md,
+  },
+  modalText: {
+    textAlign: "center",
+    color: AppColors.textSecondary,
+    marginBottom: Spacing.xl,
+  },
+  modalButtons: {
+    flexDirection: "row",
+    gap: Spacing.md,
+    width: "100%",
+  },
+  modalButton: {
+    flex: 1,
+    height: 48,
+    borderRadius: BorderRadius.md,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  discardButton: {
+    backgroundColor: AppColors.elevated,
+  },
+  saveButton: {
+    backgroundColor: AppColors.pitchGreen,
   },
 });

@@ -43,6 +43,8 @@ export default function MatchesScreen() {
   const [showTeamPicker, setShowTeamPicker] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [matchToDelete, setMatchToDelete] = useState<Match | null>(null);
+  const [selectedTeamFilter, setSelectedTeamFilter] = useState<string | null>(null);
+  const [showFilterPicker, setShowFilterPicker] = useState(false);
   const swipeableRefs = useRef<Map<string, Swipeable>>(new Map());
 
   const loadData = useCallback(async () => {
@@ -112,6 +114,21 @@ export default function MatchesScreen() {
     [teams]
   );
 
+  const filteredMatches = selectedTeamFilter
+    ? matches.filter((m) => m.teamId === selectedTeamFilter)
+    : matches;
+
+  const handleFilterPress = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setShowFilterPicker(true);
+  }, []);
+
+  const handleSelectFilter = useCallback((teamId: string | null) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setSelectedTeamFilter(teamId);
+    setShowFilterPicker(false);
+  }, []);
+
   const getResultColor = (result: ReturnType<typeof getMatchResult>) => {
     switch (result) {
       case "win":
@@ -179,6 +196,30 @@ export default function MatchesScreen() {
     },
     [handleDeletePress]
   );
+
+  const renderFilterButton = useCallback(() => {
+    if (teams.length <= 1) return null;
+    
+    const filterLabel = selectedTeamFilter
+      ? getTeamName(selectedTeamFilter)
+      : "All Teams";
+
+    return (
+      <Pressable
+        style={({ pressed }) => [
+          styles.filterButton,
+          { opacity: pressed ? 0.8 : 1 },
+        ]}
+        onPress={handleFilterPress}
+      >
+        <Feather name="filter" size={16} color={AppColors.textSecondary} />
+        <ThemedText type="body" style={{ color: theme.text, marginLeft: Spacing.sm }}>
+          {filterLabel}
+        </ThemedText>
+        <Feather name="chevron-down" size={16} color={AppColors.textSecondary} style={{ marginLeft: Spacing.xs }} />
+      </Pressable>
+    );
+  }, [teams.length, selectedTeamFilter, getTeamName, handleFilterPress, theme.text]);
 
   const renderNewMatchCard = useCallback(
     () => (
@@ -344,13 +385,14 @@ export default function MatchesScreen() {
           },
         ]}
         scrollIndicatorInsets={{ bottom: insets.bottom }}
-        data={matches}
+        data={filteredMatches}
         keyExtractor={(item) => item.id}
         renderItem={renderMatchCard}
         ListHeaderComponent={
           <>
+            {renderFilterButton()}
             {renderNewMatchCard()}
-            {matches.length === 0 ? renderEmptyState() : null}
+            {filteredMatches.length === 0 ? renderEmptyState() : null}
           </>
         }
         refreshControl={
@@ -453,6 +495,80 @@ export default function MatchesScreen() {
           />
         </View>
       </Modal>
+
+      <Modal
+        visible={showFilterPicker}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowFilterPicker(false)}
+      >
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => setShowFilterPicker(false)}
+        >
+          <View />
+        </Pressable>
+        <View style={[styles.modalSheet, { paddingBottom: insets.bottom + Spacing.lg }]}>
+          <View style={styles.modalHandle} />
+          <ThemedText type="h4" style={styles.modalTitle}>
+            Filter by Team
+          </ThemedText>
+          <Pressable
+            style={({ pressed }) => [
+              styles.teamOption,
+              { opacity: pressed ? 0.8 : 1 },
+              !selectedTeamFilter && styles.filterOptionSelected,
+            ]}
+            onPress={() => handleSelectFilter(null)}
+          >
+            <View style={styles.teamOptionIcon}>
+              <Feather name="users" size={24} color={AppColors.pitchGreen} />
+            </View>
+            <View style={styles.teamOptionInfo}>
+              <ThemedText type="body">All Teams</ThemedText>
+              <ThemedText type="small" style={{ color: AppColors.textSecondary }}>
+                {matches.length} matches total
+              </ThemedText>
+            </View>
+            {!selectedTeamFilter ? (
+              <Feather name="check" size={20} color={AppColors.pitchGreen} />
+            ) : null}
+          </Pressable>
+          <View style={styles.teamSeparator} />
+          <FlatList
+            data={teams}
+            keyExtractor={(item) => item.id}
+            renderItem={({ item }) => {
+              const matchCount = matches.filter((m) => m.teamId === item.id).length;
+              const isSelected = selectedTeamFilter === item.id;
+              return (
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.teamOption,
+                    { opacity: pressed ? 0.8 : 1 },
+                    isSelected && styles.filterOptionSelected,
+                  ]}
+                  onPress={() => handleSelectFilter(item.id)}
+                >
+                  <View style={styles.teamOptionIcon}>
+                    <Feather name="shield" size={24} color={AppColors.pitchGreen} />
+                  </View>
+                  <View style={styles.teamOptionInfo}>
+                    <ThemedText type="body">{item.name}</ThemedText>
+                    <ThemedText type="small" style={{ color: AppColors.textSecondary }}>
+                      {matchCount} matches
+                    </ThemedText>
+                  </View>
+                  {isSelected ? (
+                    <Feather name="check" size={20} color={AppColors.pitchGreen} />
+                  ) : null}
+                </Pressable>
+              );
+            }}
+            ItemSeparatorComponent={() => <View style={styles.teamSeparator} />}
+          />
+        </View>
+      </Modal>
     </>
   );
 }
@@ -468,6 +584,19 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
+  },
+  filterButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-end",
+    backgroundColor: AppColors.surface,
+    borderRadius: BorderRadius.lg,
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    marginBottom: Spacing.md,
+  },
+  filterOptionSelected: {
+    backgroundColor: "rgba(0, 168, 107, 0.1)",
   },
   newMatchCard: {
     flexDirection: "row",

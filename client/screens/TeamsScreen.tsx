@@ -351,7 +351,7 @@ export default function TeamsScreen() {
           styles.listContent,
           {
             paddingTop: headerHeight + Spacing.xl,
-            paddingBottom: isManageMode ? 100 : tabBarHeight + Spacing.xl,
+            paddingBottom: isManageMode ? tabBarHeight + 100 : tabBarHeight + Spacing.xl,
           },
         ]}
         scrollIndicatorInsets={{ bottom: insets.bottom }}
@@ -371,7 +371,7 @@ export default function TeamsScreen() {
       />
 
       {isManageMode && selectedTeamIds.size > 0 ? (
-        <View style={[styles.actionBar, { paddingBottom: insets.bottom + Spacing.md }]}>
+        <View style={[styles.actionBar, { paddingBottom: insets.bottom + tabBarHeight + Spacing.md }]}>
           <Pressable
             style={({ pressed }) => [
               styles.actionButton,
@@ -463,18 +463,44 @@ export default function TeamsScreen() {
         onRequestClose={() => setShowConfirmModal(null)}
       >
         <Pressable
-          style={styles.modalOverlay}
+          style={styles.confirmModalOverlay}
           onPress={() => setShowConfirmModal(null)}
         >
-          <View style={styles.modalContent}>
+          <View style={styles.confirmModalContent}>
+            <View style={showConfirmModal === "delete" ? styles.deleteIcon : styles.archiveIcon}>
+              <Feather
+                name={showConfirmModal === "delete" ? "trash-2" : "archive"}
+                size={32}
+                color={showConfirmModal === "delete" ? AppColors.redCard : AppColors.warningYellow}
+              />
+            </View>
             <ThemedText type="h4" style={styles.modalTitle}>
               {showConfirmModal === "delete" ? "Delete Teams" : "Archive Teams"}
             </ThemedText>
-            <ThemedText type="body" style={{ color: AppColors.textSecondary, textAlign: "center", marginBottom: Spacing.xl }}>
-              {showConfirmModal === "delete"
-                ? `Are you sure you want to permanently delete ${selectedTeamIds.size} team${selectedTeamIds.size > 1 ? "s" : ""} and all their match data? This cannot be undone.`
-                : `Archive ${selectedTeamIds.size} team${selectedTeamIds.size > 1 ? "s" : ""}? They will be hidden from this list but their data will remain viewable in Stats.`}
-            </ThemedText>
+            
+            <View style={styles.teamNamesList}>
+              {Array.from(selectedTeamIds).map((teamId) => {
+                const team = teams.find((t) => t.id === teamId);
+                return team ? (
+                  <View key={teamId} style={styles.teamNameItem}>
+                    <Feather name="shield" size={16} color={AppColors.pitchGreen} />
+                    <ThemedText type="body" style={{ marginLeft: Spacing.sm }}>
+                      {team.name}
+                    </ThemedText>
+                  </View>
+                ) : null;
+              })}
+            </View>
+
+            {showConfirmModal === "delete" ? (
+              <ThemedText type="body" style={styles.warningText}>
+                All match data for {selectedTeamIds.size === 1 ? "this team" : "these teams"} will be permanently deleted. This cannot be undone.
+              </ThemedText>
+            ) : (
+              <ThemedText type="body" style={{ color: AppColors.textSecondary, textAlign: "center", marginBottom: Spacing.xl }}>
+                {selectedTeamIds.size === 1 ? "This team" : "These teams"} will be hidden from this list but match data will remain viewable in Stats.
+              </ThemedText>
+            )}
 
             <View style={styles.confirmButtonRow}>
               <Pressable
@@ -658,11 +684,62 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0, 0, 0, 0.7)",
     justifyContent: "flex-end",
   },
+  confirmModalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.7)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: Spacing.xl,
+  },
   modalContent: {
     backgroundColor: AppColors.surface,
     borderTopLeftRadius: BorderRadius["2xl"],
     borderTopRightRadius: BorderRadius["2xl"],
     padding: Spacing.xl,
+  },
+  confirmModalContent: {
+    backgroundColor: AppColors.surface,
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.xl,
+    width: "100%",
+    maxWidth: 360,
+    alignItems: "center",
+  },
+  deleteIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: "rgba(220, 20, 60, 0.15)",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: Spacing.lg,
+  },
+  archiveIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: "rgba(255, 215, 0, 0.15)",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: Spacing.lg,
+  },
+  teamNamesList: {
+    width: "100%",
+    marginBottom: Spacing.lg,
+  },
+  teamNameItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    backgroundColor: AppColors.elevated,
+    borderRadius: BorderRadius.sm,
+    marginBottom: Spacing.xs,
+  },
+  warningText: {
+    color: AppColors.redCard,
+    textAlign: "center",
+    marginBottom: Spacing.xl,
   },
   modalTitle: {
     textAlign: "center",
