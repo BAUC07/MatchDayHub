@@ -1,4 +1,4 @@
-import React, { useCallback } from "react";
+import React, { useCallback, useState } from "react";
 import { View, StyleSheet, Image, Pressable, Switch, ScrollView, Linking, Platform, Alert } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
@@ -14,6 +14,8 @@ import { useTheme } from "@/hooks/useTheme";
 import { Spacing, AppColors, BorderRadius } from "@/constants/theme";
 import { useRevenueCat } from "@/lib/revenuecat";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
+import { generateDemoData } from "@/lib/demoData";
+import { saveTeam, saveMatches, getMatches } from "@/lib/storage";
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -53,6 +55,25 @@ export default function SettingsScreen() {
       Alert.alert('Restore Failed', error.message || 'Something went wrong');
     }
   }, [restorePurchases]);
+
+  const [loadingDemo, setLoadingDemo] = useState(false);
+  const handleLoadDemoData = useCallback(async () => {
+    if (loadingDemo) return;
+    setLoadingDemo(true);
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+      const { team, matches } = generateDemoData();
+      const existingMatches = await getMatches();
+      await saveTeam(team);
+      await saveMatches([...existingMatches, ...matches]);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      Alert.alert('Demo Data Loaded', `Created "${team.name}" with ${matches.length} matches for screenshots.`);
+    } catch (error: any) {
+      Alert.alert('Error', error.message || 'Failed to load demo data');
+    } finally {
+      setLoadingDemo(false);
+    }
+  }, [loadingDemo]);
 
   return (
     <ScrollView
@@ -181,6 +202,31 @@ export default function SettingsScreen() {
             MVP
           </ThemedText>
         </View>
+      </Card>
+
+      <ThemedText type="small" style={styles.sectionTitle}>
+        DEVELOPER
+      </ThemedText>
+
+      <Card elevation={2} style={styles.aboutCard}>
+        <Pressable
+          style={({ pressed }) => [
+            styles.aboutItem,
+            { opacity: pressed ? 0.7 : 1 },
+          ]}
+          onPress={handleLoadDemoData}
+          disabled={loadingDemo}
+        >
+          <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.md }}>
+            <Feather name="database" size={20} color={AppColors.pitchGreen} />
+            <ThemedText type="body">
+              {loadingDemo ? "Loading..." : "Load Demo Data"}
+            </ThemedText>
+          </View>
+          <ThemedText type="small" style={{ color: AppColors.textSecondary }}>
+            For screenshots
+          </ThemedText>
+        </Pressable>
       </Card>
     </ScrollView>
   );
