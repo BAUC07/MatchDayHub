@@ -170,6 +170,9 @@ server/
 - Haptic feedback on all interactions
 
 ## Recent Changes
+- Fixed team logo persistence: Logos are now saved to permanent storage instead of temporary cache
+  - Images copied from picker to app's document directory
+  - Logos persist across app restarts
 - Match Setup improvements:
   - Opposition name input now shows autocomplete suggestions from previously used team names
   - Match duration auto-defaults based on format selection (5v5=40min, 7v7=50min, 9v9=60min, 11v11=90min)

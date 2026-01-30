@@ -1,4 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as FileSystem from "expo-file-system";
 import { Team, Match, SubscriptionState, AppState } from "@/types";
 
 const STORAGE_KEYS = {
@@ -210,5 +211,67 @@ export async function addOppositionName(name: string): Promise<void> {
     }
   } catch (error) {
     console.error("Error adding opposition name:", error);
+  }
+}
+
+const getTeamLogosDir = () => {
+  const docDir = (FileSystem as any).documentDirectory || "";
+  return `${docDir}team_logos/`;
+};
+
+async function ensureLogosDirectoryExists(): Promise<void> {
+  const logosDir = getTeamLogosDir();
+  if (!logosDir) return;
+  const dirInfo = await FileSystem.getInfoAsync(logosDir);
+  if (!dirInfo.exists) {
+    await FileSystem.makeDirectoryAsync(logosDir, { intermediates: true });
+  }
+}
+
+export async function saveTeamLogo(tempUri: string, teamId: string): Promise<string> {
+  try {
+    await ensureLogosDirectoryExists();
+    
+    const logosDir = getTeamLogosDir();
+    if (!logosDir) {
+      throw new Error("Document directory not available");
+    }
+    
+    const fileExtension = tempUri.split('.').pop()?.toLowerCase() || 'jpg';
+    const permanentPath = `${logosDir}${teamId}.${fileExtension}`;
+    
+    const existingFile = await FileSystem.getInfoAsync(permanentPath);
+    if (existingFile.exists) {
+      await FileSystem.deleteAsync(permanentPath, { idempotent: true });
+    }
+    
+    await FileSystem.copyAsync({
+      from: tempUri,
+      to: permanentPath,
+    });
+    
+    return permanentPath;
+  } catch (error) {
+    console.error("Error saving team logo:", error);
+    throw error;
+  }
+}
+
+export async function deleteTeamLogo(teamId: string): Promise<void> {
+  try {
+    const logosDir = getTeamLogosDir();
+    if (!logosDir) return;
+    
+    const extensions = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
+    for (const ext of extensions) {
+      const path = `${logosDir}${teamId}.${ext}`;
+      const fileInfo = await FileSystem.getInfoAsync(path);
+      if (fileInfo.exists) {
+        await FileSystem.deleteAsync(path, { idempotent: true });
+        break;
+      }
+    }
+  } catch (error) {
+    console.error("Error deleting team logo:", error);
   }
 }

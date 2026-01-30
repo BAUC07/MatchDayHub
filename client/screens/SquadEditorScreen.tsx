@@ -24,7 +24,7 @@ import { Card } from "@/components/Card";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, AppColors, BorderRadius } from "@/constants/theme";
 import { Team, Player } from "@/types";
-import { getTeam, saveTeam, generateId } from "@/lib/storage";
+import { getTeam, saveTeam, generateId, saveTeamLogo } from "@/lib/storage";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
@@ -121,7 +121,13 @@ export default function SquadEditorScreen() {
 
     setSaving(true);
     try {
-      const updatedTeam = { ...team, players, logoUri: logoUri || undefined };
+      let finalLogoUri: string | undefined = logoUri || undefined;
+      
+      if (logoUri && logoUri !== originalLogoRef.current) {
+        finalLogoUri = await saveTeamLogo(logoUri, team.id);
+      }
+      
+      const updatedTeam = { ...team, players, logoUri: finalLogoUri };
       await saveTeam(updatedTeam);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       navigation.goBack();
@@ -131,7 +137,7 @@ export default function SquadEditorScreen() {
     } finally {
       setSaving(false);
     }
-  }, [team, players, saving, navigation]);
+  }, [team, players, logoUri, saving, navigation]);
 
   const handleHeaderBackPress = useCallback(() => {
     if (hasUnsavedChanges()) {

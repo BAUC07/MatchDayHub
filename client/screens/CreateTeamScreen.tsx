@@ -14,7 +14,7 @@ import { ThemedText } from "@/components/ThemedText";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, AppColors, BorderRadius } from "@/constants/theme";
 import { Team } from "@/types";
-import { saveTeam, generateId } from "@/lib/storage";
+import { saveTeam, generateId, saveTeamLogo } from "@/lib/storage";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
@@ -53,10 +53,17 @@ export default function CreateTeamScreen() {
     setSaving(true);
 
     try {
+      const teamId = generateId();
+      let permanentLogoUri: string | undefined;
+      
+      if (logoUri) {
+        permanentLogoUri = await saveTeamLogo(logoUri, teamId);
+      }
+      
       const newTeam: Team = {
-        id: generateId(),
+        id: teamId,
         name: teamName.trim(),
-        logoUri: logoUri || undefined,
+        logoUri: permanentLogoUri,
         players: [],
         createdAt: new Date().toISOString(),
         matchesPlayed: 0,
