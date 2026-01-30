@@ -303,7 +303,7 @@ export default function LiveMatchScreen() {
 
   // getTimeDisplay removed - LiveTimer component handles time display
 
-  const handleToggleClock = useCallback(() => {
+  const handleToggleClock = useCallback(async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     
     if (isHalfTime) {
@@ -316,8 +316,16 @@ export default function LiveMatchScreen() {
     
     if (!isRunning) {
       // Starting the timer
-      setTimerStartTimestamp(Date.now());
+      const now = Date.now();
+      setTimerStartTimestamp(now);
       setIsRunning(true);
+      
+      // Record kickoff timestamp if this is the first start (baseTime is 0)
+      if (baseTime === 0 && match && !match.kickoffTimestamp) {
+        const updatedMatch = { ...match, kickoffTimestamp: now };
+        setMatch(updatedMatch);
+        await saveMatch(updatedMatch);
+      }
     } else {
       // Stopping the timer - accumulate elapsed time
       if (timerStartTimestamp) {
@@ -327,9 +335,9 @@ export default function LiveMatchScreen() {
       setTimerStartTimestamp(null);
       setIsRunning(false);
     }
-  }, [isHalfTime, isRunning, timerStartTimestamp, getCurrentMatchTime, halfDuration]);
+  }, [isHalfTime, isRunning, timerStartTimestamp, getCurrentMatchTime, halfDuration, baseTime, match]);
 
-  const handleHalfTime = useCallback(() => {
+  const handleHalfTime = useCallback(async () => {
     const currentTime = getCurrentMatchTime();
     
     if (isHalfTime) {
@@ -354,11 +362,18 @@ export default function LiveMatchScreen() {
       setTimerStartTimestamp(null);
       setIsRunning(false);
       setIsHalfTime(true);
-      if (currentTime > halfDuration) {
-        setFirstHalfAddedTime(currentTime - halfDuration);
+      
+      const htAddedTime = currentTime > halfDuration ? currentTime - halfDuration : 0;
+      setFirstHalfAddedTime(htAddedTime);
+      
+      // Record the half time match time
+      if (match) {
+        const updatedMatch = { ...match, halfTimeMatchTime: currentTime };
+        setMatch(updatedMatch);
+        await saveMatch(updatedMatch);
       }
     }
-  }, [isHalfTime, isSecondHalf, getCurrentMatchTime, halfDuration, timerStartTimestamp]);
+  }, [isHalfTime, isSecondHalf, getCurrentMatchTime, halfDuration, timerStartTimestamp, match]);
 
   const handlePauseLongPress = useCallback(() => {
     if (isRunning) {
@@ -654,6 +669,7 @@ export default function LiveMatchScreen() {
       ...match,
       isCompleted: true,
       totalMatchTime: currentTime,
+      endMatchTime: currentTime,
     };
 
     const updatedTeam: Team = {
