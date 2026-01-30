@@ -23,7 +23,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { Spacing, AppColors, BorderRadius } from "@/constants/theme";
 import { Match, Team, MatchEvent } from "@/types";
 import { getMatch, getTeam } from "@/lib/storage";
-import { formatMatchTime, formatDate, getMatchResult, countYellowCards, countRedCards } from "@/lib/utils";
+import { formatMatchTime, formatDate, getMatchResult, countYellowCards, countRedCards, formatTimeWithAdded, formatTotalGameTime } from "@/lib/utils";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
@@ -219,13 +219,6 @@ export default function MatchSummaryScreen() {
     })).sort((a, b) => b.timeOnPitch - a.timeOnPitch);
   }, [match, team, getPlayerName]);
 
-  const getHalfTimePosition = useCallback((match: Match) => {
-    const plannedHalf = ((match.plannedDuration || 90) / 2) * 60;
-    const firstHalfAdded = match.firstHalfAddedTime || 0;
-    const halfTimePoint = plannedHalf + firstHalfAdded;
-    return (halfTimePoint / Math.max(match.totalMatchTime, 1)) * 100;
-  }, []);
-
   if (loading || !match || !team) {
     return (
       <View
@@ -255,8 +248,6 @@ export default function MatchSummaryScreen() {
 
   const yellowCards = countYellowCards(match.events);
   const redCards = countRedCards(match.events);
-
-  const halfTimePosition = getHalfTimePosition(match);
 
   return (
     <ScrollView
@@ -392,127 +383,171 @@ export default function MatchSummaryScreen() {
         </View>
 
         <Card elevation={2} style={styles.timelineCard}>
-          <View style={styles.timelineBar}>
-            <View style={[styles.halfIndicator, { left: `${Math.min(halfTimePosition, 95)}%` }]}>
-              <View style={styles.halfIndicatorLine} />
-              <ThemedText type="caption" style={styles.halfIndicatorText}>HT</ThemedText>
-            </View>
-          </View>
-          
-          <View style={styles.timeLabels}>
-            <ThemedText type="caption" style={{ color: AppColors.textSecondary }}>
-              0'
-            </ThemedText>
-            <ThemedText type="caption" style={{ color: AppColors.textSecondary }}>
-              HT
-            </ThemedText>
-            <ThemedText type="caption" style={{ color: AppColors.textSecondary }}>
-              {Math.floor(match.totalMatchTime / 60)}'
-            </ThemedText>
-          </View>
-
-          {filteredEvents.length === 0 ? (
-            <View style={styles.noEvents}>
-              <ThemedText type="small" style={{ color: AppColors.textSecondary }}>
-                {match.events.length === 0 ? "No events recorded" : "No events to show"}
+          <View style={styles.eventsList}>
+            {/* Kick Off */}
+            <View style={styles.eventItem}>
+              <ThemedText type="caption" style={styles.eventTime}>
+                KO
+              </ThemedText>
+              <Feather name="play" size={14} color={AppColors.pitchGreen} />
+              <ThemedText type="small" style={styles.eventDescription}>
+                Kick Off
               </ThemedText>
             </View>
-          ) : (
-            <View style={styles.eventsList}>
-              {match.halfTimeTriggered && (
-                <View style={styles.halfTimeBreak}>
-                  <View style={styles.halfTimeBreakLine} />
-                  <ThemedText type="caption" style={styles.halfTimeBreakText}>
-                    Half Time
-                  </ThemedText>
-                  <View style={styles.halfTimeBreakLine} />
-                </View>
-              )}
-              {filteredEvents.map((event, index) => {
-                const plannedHalf = ((match.plannedDuration || 90) / 2) * 60;
-                const firstHalfAdded = match.firstHalfAddedTime || 0;
-                const halfTimePoint = plannedHalf + firstHalfAdded;
-                const isSecondHalf = event.timestamp > halfTimePoint;
-                const showHalfTimeBreakAfter = 
-                  match.halfTimeTriggered && 
-                  index < filteredEvents.length - 1 &&
-                  !isSecondHalf &&
-                  filteredEvents[index + 1].timestamp > halfTimePoint;
-                
-                return (
-                  <React.Fragment key={event.id}>
+
+            {/* Match Events */}
+            {filteredEvents.map((event, index) => {
+              const plannedHalf = ((match.plannedDuration || 90) / 2) * 60;
+              const firstHalfAdded = match.firstHalfAddedTime || 0;
+              const halfTimePoint = plannedHalf + firstHalfAdded;
+              const isSecondHalf = event.timestamp > halfTimePoint;
+              const showHalfTimeBreakAfter = 
+                match.halfTimeTriggered && 
+                index < filteredEvents.length - 1 &&
+                !isSecondHalf &&
+                filteredEvents[index + 1].timestamp > halfTimePoint;
+              
+              // Check if this is the last first-half event and we need HT break after
+              const isLastFirstHalfEvent = 
+                match.halfTimeTriggered &&
+                !isSecondHalf &&
+                (index === filteredEvents.length - 1 || filteredEvents[index + 1].timestamp > halfTimePoint);
+              
+              return (
+                <React.Fragment key={event.id}>
+                  <View style={styles.eventItem}>
+                    <ThemedText type="caption" style={styles.eventTime}>
+                      {formatMatchTime(event.timestamp)}
+                    </ThemedText>
+                    {event.type === "goal_for" ? (
+                      <>
+                        <Feather name="target" size={14} color={AppColors.pitchGreen} />
+                        <ThemedText type="small" style={styles.eventDescription}>
+                          Goal: {getPlayerName(event.playerId)}
+                          {event.assistPlayerId ? ` (assist: ${getPlayerName(event.assistPlayerId)})` : ""}
+                          {event.goalType ? ` - ${event.goalType.replace("_", " ")}` : ""}
+                        </ThemedText>
+                      </>
+                    ) : event.type === "goal_against" ? (
+                      <>
+                        <Feather name="target" size={14} color={AppColors.redCard} />
+                        <ThemedText type="small" style={styles.eventDescription}>
+                          Goal conceded{event.goalType ? ` (${event.goalType.replace("_", " ")})` : ""}
+                        </ThemedText>
+                      </>
+                    ) : event.type === "card" ? (
+                      <>
+                        <View
+                          style={[
+                            styles.eventCardIcon,
+                            {
+                              backgroundColor:
+                                event.cardType === "yellow"
+                                  ? AppColors.warningYellow
+                                  : AppColors.redCard,
+                            },
+                          ]}
+                        />
+                        <ThemedText type="small" style={styles.eventDescription}>
+                          {event.cardType === "yellow" ? "Yellow" : "Red"} card:{" "}
+                          {getPlayerName(event.playerId)}
+                        </ThemedText>
+                      </>
+                    ) : event.type === "substitution" ? (
+                      <>
+                        <Feather
+                          name="refresh-cw"
+                          size={14}
+                          color={AppColors.textSecondary}
+                        />
+                        <ThemedText type="small" style={styles.eventDescription}>
+                          {getPlayerName(event.playerOnId)} on for{" "}
+                          {getPlayerName(event.playerOffId)}
+                        </ThemedText>
+                      </>
+                    ) : (
+                      <>
+                        <Feather name="circle" size={14} color={AppColors.warningYellow} />
+                        <ThemedText type="small" style={styles.eventDescription}>
+                          Penalty {event.isForTeam ? "for" : "against"}:{" "}
+                          {event.penaltyOutcome}
+                        </ThemedText>
+                      </>
+                    )}
+                  </View>
+                  {showHalfTimeBreakAfter && (
                     <View style={styles.eventItem}>
                       <ThemedText type="caption" style={styles.eventTime}>
-                        {formatMatchTime(event.timestamp)}
+                        {match.halfTimeMatchTime 
+                          ? formatTimeWithAdded(match.halfTimeMatchTime, match.plannedDuration || 90, false)
+                          : "HT"}
                       </ThemedText>
-                      {event.type === "goal_for" ? (
-                        <>
-                          <Feather name="target" size={14} color={AppColors.pitchGreen} />
-                          <ThemedText type="small" style={styles.eventDescription}>
-                            Goal: {getPlayerName(event.playerId)}
-                            {event.assistPlayerId ? ` (assist: ${getPlayerName(event.assistPlayerId)})` : ""}
-                            {event.goalType ? ` - ${event.goalType.replace("_", " ")}` : ""}
-                          </ThemedText>
-                        </>
-                      ) : event.type === "goal_against" ? (
-                        <>
-                          <Feather name="target" size={14} color={AppColors.redCard} />
-                          <ThemedText type="small" style={styles.eventDescription}>
-                            Goal conceded{event.goalType ? ` (${event.goalType.replace("_", " ")})` : ""}
-                          </ThemedText>
-                        </>
-                      ) : event.type === "card" ? (
-                        <>
-                          <View
-                            style={[
-                              styles.eventCardIcon,
-                              {
-                                backgroundColor:
-                                  event.cardType === "yellow"
-                                    ? AppColors.warningYellow
-                                    : AppColors.redCard,
-                              },
-                            ]}
-                          />
-                          <ThemedText type="small" style={styles.eventDescription}>
-                            {event.cardType === "yellow" ? "Yellow" : "Red"} card:{" "}
-                            {getPlayerName(event.playerId)}
-                          </ThemedText>
-                        </>
-                      ) : event.type === "substitution" ? (
-                        <>
-                          <Feather
-                            name="refresh-cw"
-                            size={14}
-                            color={AppColors.textSecondary}
-                          />
-                          <ThemedText type="small" style={styles.eventDescription}>
-                            {getPlayerName(event.playerOnId)} on for{" "}
-                            {getPlayerName(event.playerOffId)}
-                          </ThemedText>
-                        </>
-                      ) : (
-                        <>
-                          <Feather name="circle" size={14} color={AppColors.warningYellow} />
-                          <ThemedText type="small" style={styles.eventDescription}>
-                            Penalty {event.isForTeam ? "for" : "against"}:{" "}
-                            {event.penaltyOutcome}
-                          </ThemedText>
-                        </>
-                      )}
+                      <Feather name="pause" size={14} color={AppColors.textSecondary} />
+                      <ThemedText type="small" style={styles.eventDescription}>
+                        Half Time
+                      </ThemedText>
                     </View>
-                    {showHalfTimeBreakAfter && (
-                      <View style={styles.halfTimeBreakInline}>
-                        <View style={styles.halfTimeBreakLine} />
-                        <ThemedText type="caption" style={styles.halfTimeBreakText}>
-                          Half Time
-                        </ThemedText>
-                        <View style={styles.halfTimeBreakLine} />
-                      </View>
-                    )}
-                  </React.Fragment>
-                );
-              })}
+                  )}
+                </React.Fragment>
+              );
+            })}
+
+            {/* Half Time (if no events or all events are before HT) */}
+            {match.halfTimeTriggered && (filteredEvents.length === 0 || 
+              filteredEvents.every(e => {
+                const plannedHalf = ((match.plannedDuration || 90) / 2) * 60;
+                const firstHalfAdded = match.firstHalfAddedTime || 0;
+                return e.timestamp <= plannedHalf + firstHalfAdded;
+              }) && !filteredEvents.some((e, i) => {
+                const plannedHalf = ((match.plannedDuration || 90) / 2) * 60;
+                const firstHalfAdded = match.firstHalfAddedTime || 0;
+                const isSecondHalf = e.timestamp > plannedHalf + firstHalfAdded;
+                return !isSecondHalf && i < filteredEvents.length - 1 && 
+                  filteredEvents[i + 1].timestamp > plannedHalf + firstHalfAdded;
+              })) && (
+              <View style={styles.eventItem}>
+                <ThemedText type="caption" style={styles.eventTime}>
+                  {match.halfTimeMatchTime 
+                    ? formatTimeWithAdded(match.halfTimeMatchTime, match.plannedDuration || 90, false)
+                    : "HT"}
+                </ThemedText>
+                <Feather name="pause" size={14} color={AppColors.textSecondary} />
+                <ThemedText type="small" style={styles.eventDescription}>
+                  Half Time
+                </ThemedText>
+              </View>
+            )}
+
+            {/* End Match */}
+            {match.isCompleted && (
+              <View style={styles.eventItem}>
+                <ThemedText type="caption" style={styles.eventTime}>
+                  {match.endMatchTime 
+                    ? formatTimeWithAdded(match.endMatchTime, match.plannedDuration || 90, true, match.firstHalfAddedTime || 0)
+                    : "FT"}
+                </ThemedText>
+                <Feather name="flag" size={14} color={AppColors.pitchGreen} />
+                <ThemedText type="small" style={styles.eventDescription}>
+                  Full Time
+                </ThemedText>
+              </View>
+            )}
+          </View>
+
+          {/* Total Game Time */}
+          {match.isCompleted && (
+            <View style={styles.totalTimeContainer}>
+              <ThemedText type="caption" style={{ color: AppColors.textSecondary }}>
+                Total Game Time:
+              </ThemedText>
+              <ThemedText type="body" style={{ fontWeight: "600" }}>
+                {formatTotalGameTime(
+                  match.totalMatchTime,
+                  match.plannedDuration || 90,
+                  match.firstHalfAddedTime || 0,
+                  match.secondHalfAddedTime || 0
+                )}
+              </ThemedText>
             </View>
           )}
         </Card>
@@ -674,35 +709,6 @@ const styles = StyleSheet.create({
     padding: Spacing.lg,
     marginBottom: Spacing.xl,
   },
-  timelineBar: {
-    height: 24,
-    backgroundColor: AppColors.elevated,
-    borderRadius: BorderRadius.xs,
-    position: "relative",
-    marginBottom: Spacing.sm,
-  },
-  halfIndicator: {
-    position: "absolute",
-    top: 0,
-    bottom: 0,
-    alignItems: "center",
-    transform: [{ translateX: -12 }],
-  },
-  halfIndicatorLine: {
-    width: 2,
-    flex: 1,
-    backgroundColor: AppColors.textSecondary,
-  },
-  halfIndicatorText: {
-    color: AppColors.textSecondary,
-    fontSize: 10,
-    marginTop: 2,
-  },
-  timeLabels: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: Spacing.md,
-  },
   noEvents: {
     alignItems: "center",
     paddingVertical: Spacing.lg,
@@ -753,6 +759,15 @@ const styles = StyleSheet.create({
   halfTimeBreakText: {
     color: AppColors.textSecondary,
     fontWeight: "600",
+  },
+  totalTimeContainer: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingTop: Spacing.md,
+    marginTop: Spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: AppColors.elevated,
   },
   playingTimeCard: {
     padding: Spacing.lg,

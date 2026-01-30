@@ -90,3 +90,65 @@ export function formatDateShort(dateString: string): string {
     month: "short",
   });
 }
+
+export function formatTimeWithAdded(
+  matchTimeInSeconds: number,
+  plannedDuration: number,
+  isSecondHalf: boolean,
+  firstHalfAddedTime: number = 0
+): string {
+  const halfDuration = (plannedDuration / 2) * 60;
+  const fullDuration = plannedDuration * 60;
+  const halfMins = Math.floor(plannedDuration / 2);
+  const fullMins = Math.floor(plannedDuration);
+
+  if (!isSecondHalf) {
+    if (matchTimeInSeconds <= halfDuration) {
+      const mins = Math.floor(matchTimeInSeconds / 60);
+      return `${mins}'`;
+    } else {
+      const addedSecs = matchTimeInSeconds - halfDuration;
+      const addedMins = Math.floor(addedSecs / 60);
+      const addedRemSecs = addedSecs % 60;
+      if (addedRemSecs > 0) {
+        return `${halfMins}+${addedMins}:${addedRemSecs.toString().padStart(2, '0')}'`;
+      }
+      return `${halfMins}+${addedMins}'`;
+    }
+  } else {
+    const secondHalfTime = matchTimeInSeconds - halfDuration - firstHalfAddedTime;
+    const displayTime = halfDuration + secondHalfTime;
+
+    if (displayTime <= fullDuration) {
+      const mins = Math.floor(displayTime / 60);
+      return `${mins}'`;
+    } else {
+      const addedSecs = displayTime - fullDuration;
+      const addedMins = Math.floor(addedSecs / 60);
+      const addedRemSecs = addedSecs % 60;
+      if (addedRemSecs > 0) {
+        return `${fullMins}+${addedMins}:${addedRemSecs.toString().padStart(2, '0')}'`;
+      }
+      return `${fullMins}+${addedMins}'`;
+    }
+  }
+}
+
+export function formatTotalGameTime(
+  totalMatchTime: number,
+  plannedDuration: number,
+  firstHalfAddedTime: number = 0,
+  secondHalfAddedTime: number = 0
+): string {
+  const fullDuration = plannedDuration * 60;
+  const fullMins = Math.floor(plannedDuration);
+  const totalAddedTime = firstHalfAddedTime + secondHalfAddedTime;
+  
+  if (totalMatchTime <= fullDuration) {
+    const mins = Math.floor(totalMatchTime / 60);
+    return `${mins}'`;
+  } else {
+    const totalAddedMins = Math.floor(totalAddedTime / 60);
+    return `${fullMins}+${totalAddedMins}'`;
+  }
+}
