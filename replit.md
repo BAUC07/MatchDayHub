@@ -168,6 +168,10 @@ server/
 - Haptic feedback on all interactions
 
 ## Recent Changes
+- Squad Editor now detects unsaved changes and prompts to save or discard when navigating away
+- Matches screen has team filter dropdown when multiple teams exist (shows match counts per team)
+- Enhanced delete team confirmation modal now shows team names and warns about permanent match data deletion
+- Fixed tab bar overlap in Manage Teams mode (action bar properly positioned above tab bar)
 - Enhanced Match Setup with auto-populated lineup and unavailable player tracking:
   - Starting lineup auto-fills based on match format (5v5=5, 7v7=7, 9v9=9, 11v11=11)
   - Remaining players automatically assigned as substitutes
