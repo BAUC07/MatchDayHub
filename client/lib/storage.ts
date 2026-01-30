@@ -6,6 +6,7 @@ const STORAGE_KEYS = {
   MATCHES: "@matchday_matches",
   SUBSCRIPTION: "@matchday_subscription",
   CURRENT_MATCH: "@matchday_current_match",
+  OPPOSITION_NAMES: "@matchday_opposition_names",
 };
 
 const DEFAULT_SUBSCRIPTION: SubscriptionState = {
@@ -187,4 +188,27 @@ export async function getAppState(): Promise<AppState> {
 
 export function generateId(): string {
   return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+}
+
+export async function getOppositionNames(): Promise<string[]> {
+  try {
+    const data = await AsyncStorage.getItem(STORAGE_KEYS.OPPOSITION_NAMES);
+    return data ? JSON.parse(data) : [];
+  } catch (error) {
+    console.error("Error getting opposition names:", error);
+    return [];
+  }
+}
+
+export async function addOppositionName(name: string): Promise<void> {
+  try {
+    const names = await getOppositionNames();
+    const trimmedName = name.trim();
+    if (!names.includes(trimmedName)) {
+      names.push(trimmedName);
+      await AsyncStorage.setItem(STORAGE_KEYS.OPPOSITION_NAMES, JSON.stringify(names));
+    }
+  } catch (error) {
+    console.error("Error adding opposition name:", error);
+  }
 }

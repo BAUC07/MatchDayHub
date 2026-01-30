@@ -4,9 +4,11 @@ import {
   StyleSheet,
   TextInput,
   Pressable,
-  ScrollView,
   LayoutRectangle,
+  Modal,
+  FlatList,
 } from "react-native";
+import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useFocusEffect, useNavigation, useRoute, RouteProp } from "@react-navigation/native";
@@ -27,7 +29,7 @@ import { Card } from "@/components/Card";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, AppColors, BorderRadius } from "@/constants/theme";
 import { Team, Player, Match, MatchFormat, MatchLocation } from "@/types";
-import { getTeam, saveTeam, saveMatch, generateId } from "@/lib/storage";
+import { getTeam, saveTeam, saveMatch, generateId, getOppositionNames, addOppositionName } from "@/lib/storage";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
@@ -173,12 +175,17 @@ export default function MatchSetupScreen() {
   const [opposition, setOpposition] = useState("");
   const [location, setLocation] = useState<MatchLocation>("home");
   const [format, setFormat] = useState<MatchFormat>("11v11");
-  const [gameDuration, setGameDuration] = useState("60");
+  const [gameDuration, setGameDuration] = useState("90");
   const [playerStatuses, setPlayerStatuses] = useState<Record<string, PlayerStatus>>({});
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [newPlayerName, setNewPlayerName] = useState("");
   const [newPlayerNumber, setNewPlayerNumber] = useState("");
+  const [showAddPlayerModal, setShowAddPlayerModal] = useState(false);
+  const [oppositionSuggestions, setOppositionSuggestions] = useState<string[]>([]);
+  const [allOppositionNames, setAllOppositionNames] = useState<string[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const scrollViewRef = useRef<{ scrollToPosition?: (x: number, y: number, animated?: boolean) => void }>(null);
 
   const columnLayouts = useRef<ColumnLayouts>({
     starting: null,
@@ -186,9 +193,23 @@ export default function MatchSetupScreen() {
     unavailable: null,
   });
 
+  const getDefaultDuration = (f: MatchFormat) => {
+    switch (f) {
+      case "5v5": return "40";
+      case "7v7": return "50";
+      case "9v9": return "60";
+      case "11v11": return "90";
+    }
+  };
+
   const loadTeam = useCallback(async () => {
     try {
-      const teamData = await getTeam(route.params.teamId);
+      const [teamData, savedOppositionNames] = await Promise.all([
+        getTeam(route.params.teamId),
+        getOppositionNames(),
+      ]);
+      setAllOppositionNames(savedOppositionNames);
+      
       if (teamData) {
         setTeam(teamData);
         const initialStatuses: Record<string, PlayerStatus> = {};
@@ -238,9 +259,51 @@ export default function MatchSetupScreen() {
     setPlayerStatuses((prev) => ({ ...prev, [newPlayer.id]: "bench" }));
     setNewPlayerName("");
     setNewPlayerNumber("");
+    setShowAddPlayerModal(false);
     
     await saveTeam(updatedTeam);
   }, [team, newPlayerName, newPlayerNumber]);
+
+  const handleOppositionChange = useCallback((text: string) => {
+    setOpposition(text);
+    if (text.trim().length > 0) {
+      const filtered = allOppositionNames.filter(
+        (name) => name.toLowerCase().includes(text.toLowerCase()) && name.toLowerCase() !== text.toLowerCase()
+      );
+      setOppositionSuggestions(filtered.slice(0, 5));
+      setShowSuggestions(filtered.length > 0);
+    } else {
+      setOppositionSuggestions([]);
+      setShowSuggestions(false);
+    }
+  }, [allOppositionNames]);
+
+  const handleSelectSuggestion = useCallback((name: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setOpposition(name);
+    setShowSuggestions(false);
+    setOppositionSuggestions([]);
+  }, []);
+
+  const handleFormatChange = useCallback((f: MatchFormat) => {
+    Haptics.selectionAsync();
+    setFormat(f);
+    setGameDuration(getDefaultDuration(f));
+    setPlayerStatuses((prev) => {
+      const max = getMaxPlayers(f);
+      const starting = Object.entries(prev)
+        .filter(([, s]) => s === "starting")
+        .map(([id]) => id);
+      if (starting.length > max) {
+        const updated = { ...prev };
+        starting.slice(max).forEach((id) => {
+          updated[id] = "bench";
+        });
+        return updated;
+      }
+      return prev;
+    });
+  }, []);
 
   const allPlayers = team?.players || [];
   const startingPlayers = allPlayers.filter((p) => playerStatuses[p.id] === "starting");
@@ -339,6 +402,7 @@ export default function MatchSetupScreen() {
       };
 
       await saveMatch(match);
+      await addOppositionName(opposition.trim());
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       navigation.replace("LiveMatch", { matchId: match.id });
     } catch (error) {
@@ -396,7 +460,7 @@ export default function MatchSetupScreen() {
   }
 
   return (
-    <ScrollView
+    <KeyboardAwareScrollView
       style={[styles.container, { backgroundColor: theme.backgroundRoot }]}
       contentContainerStyle={[
         styles.content,
@@ -405,18 +469,48 @@ export default function MatchSetupScreen() {
           paddingBottom: insets.bottom + Spacing.xl,
         },
       ]}
+      keyboardShouldPersistTaps="handled"
     >
       <Card elevation={2} style={styles.matchInfoCard}>
         <View style={styles.inputRow}>
           <ThemedText type="small" style={styles.inputLabel}>VS</ThemedText>
-          <TextInput
-            style={[styles.oppositionInput, { color: theme.text }]}
-            value={opposition}
-            onChangeText={setOpposition}
-            placeholder="Opposition team"
-            placeholderTextColor={AppColors.textDisabled}
-            maxLength={50}
-          />
+          <View style={styles.oppositionContainer}>
+            <TextInput
+              style={[styles.oppositionInput, { color: theme.text }]}
+              value={opposition}
+              onChangeText={handleOppositionChange}
+              onFocus={() => {
+                if (oppositionSuggestions.length > 0) {
+                  setShowSuggestions(true);
+                }
+              }}
+              onBlur={() => {
+                setTimeout(() => setShowSuggestions(false), 200);
+              }}
+              placeholder="Opposition team"
+              placeholderTextColor={AppColors.textDisabled}
+              maxLength={50}
+            />
+            {showSuggestions && oppositionSuggestions.length > 0 ? (
+              <View style={styles.suggestionsDropdown}>
+                {oppositionSuggestions.map((name) => (
+                  <Pressable
+                    key={name}
+                    style={({ pressed }) => [
+                      styles.suggestionItem,
+                      { opacity: pressed ? 0.7 : 1 },
+                    ]}
+                    onPress={() => handleSelectSuggestion(name)}
+                  >
+                    <Feather name="clock" size={14} color={AppColors.textSecondary} />
+                    <ThemedText type="body" style={{ marginLeft: Spacing.sm }}>
+                      {name}
+                    </ThemedText>
+                  </Pressable>
+                ))}
+              </View>
+            ) : null}
+          </View>
         </View>
 
         <View style={styles.optionsRow}>
@@ -454,24 +548,7 @@ export default function MatchSetupScreen() {
                   styles.formatButton,
                   format === f && styles.formatButtonActive,
                 ]}
-                onPress={() => {
-                  Haptics.selectionAsync();
-                  setFormat(f);
-                  setPlayerStatuses((prev) => {
-                    const max = getMaxPlayers(f);
-                    const starting = Object.entries(prev)
-                      .filter(([, s]) => s === "starting")
-                      .map(([id]) => id);
-                    if (starting.length > max) {
-                      const updated = { ...prev };
-                      starting.slice(max).forEach((id) => {
-                        updated[id] = "bench";
-                      });
-                      return updated;
-                    }
-                    return prev;
-                  });
-                }}
+                onPress={() => handleFormatChange(f)}
               >
                 <ThemedText
                   type="caption"
@@ -622,40 +699,108 @@ export default function MatchSetupScreen() {
         )}
       </View>
 
-      <Card elevation={2} style={styles.addPlayerCard}>
-        <ThemedText type="small" style={styles.addPlayerTitle}>
-          {allPlayers.length === 0 ? "ADD PLAYERS TO GET STARTED" : "ADD PLAYER"}
+      <Pressable
+        style={({ pressed }) => [
+          styles.addPlayerButton,
+          { opacity: pressed ? 0.8 : 1 },
+        ]}
+        onPress={() => {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          setShowAddPlayerModal(true);
+        }}
+      >
+        <Feather name="user-plus" size={18} color="#FFFFFF" />
+        <ThemedText type="body" style={{ color: "#FFFFFF", marginLeft: Spacing.sm, fontWeight: "600" }}>
+          Add Player
         </ThemedText>
-        <View style={styles.addPlayerRow}>
-          <TextInput
-            style={[styles.newPlayerNameInput, { color: theme.text }]}
-            value={newPlayerName}
-            onChangeText={setNewPlayerName}
-            placeholder="Player name"
-            placeholderTextColor={AppColors.textDisabled}
-          />
-          <TextInput
-            style={[styles.newPlayerNumberInput, { color: theme.text }]}
-            value={newPlayerNumber}
-            onChangeText={setNewPlayerNumber}
-            placeholder="#"
-            placeholderTextColor={AppColors.textDisabled}
-            keyboardType="number-pad"
-            maxLength={3}
-          />
-          <Pressable
-            style={[
-              styles.addPlayerButton,
-              !newPlayerName.trim() && styles.addPlayerButtonDisabled,
-            ]}
-            onPress={handleAddPlayer}
-            disabled={!newPlayerName.trim()}
-          >
-            <Feather name="plus" size={20} color="#FFFFFF" />
-          </Pressable>
-        </View>
-      </Card>
-    </ScrollView>
+      </Pressable>
+
+      <Modal
+        visible={showAddPlayerModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowAddPlayerModal(false)}
+      >
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => setShowAddPlayerModal(false)}
+        >
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <ThemedText type="h4">Add New Player</ThemedText>
+              <Pressable
+                style={({ pressed }) => [{ opacity: pressed ? 0.6 : 1 }]}
+                onPress={() => setShowAddPlayerModal(false)}
+              >
+                <Feather name="x" size={24} color={AppColors.textSecondary} />
+              </Pressable>
+            </View>
+            
+            <View style={styles.modalInputGroup}>
+              <ThemedText type="small" style={styles.modalLabel}>
+                Player Name
+              </ThemedText>
+              <TextInput
+                style={[styles.modalInput, { color: theme.text }]}
+                value={newPlayerName}
+                onChangeText={setNewPlayerName}
+                placeholder="Enter player name"
+                placeholderTextColor={AppColors.textDisabled}
+                autoFocus
+              />
+            </View>
+
+            <View style={styles.modalInputGroup}>
+              <ThemedText type="small" style={styles.modalLabel}>
+                Squad Number (Optional)
+              </ThemedText>
+              <TextInput
+                style={[styles.modalInput, { color: theme.text }]}
+                value={newPlayerNumber}
+                onChangeText={setNewPlayerNumber}
+                placeholder="e.g. 10"
+                placeholderTextColor={AppColors.textDisabled}
+                keyboardType="number-pad"
+                maxLength={3}
+              />
+            </View>
+
+            <View style={styles.modalButtons}>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.modalButton,
+                  styles.modalButtonCancel,
+                  { opacity: pressed ? 0.8 : 1 },
+                ]}
+                onPress={() => {
+                  setNewPlayerName("");
+                  setNewPlayerNumber("");
+                  setShowAddPlayerModal(false);
+                }}
+              >
+                <ThemedText type="body" style={{ color: AppColors.textSecondary }}>
+                  Cancel
+                </ThemedText>
+              </Pressable>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.modalButton,
+                  styles.modalButtonSave,
+                  !newPlayerName.trim() && styles.modalButtonDisabled,
+                  { opacity: pressed ? 0.8 : 1 },
+                ]}
+                onPress={handleAddPlayer}
+                disabled={!newPlayerName.trim()}
+              >
+                <ThemedText type="body" style={{ color: "#FFFFFF", fontWeight: "600" }}>
+                  Add Player
+                </ThemedText>
+              </Pressable>
+            </View>
+          </View>
+        </Pressable>
+      </Modal>
+    </KeyboardAwareScrollView>
   );
 }
 
@@ -841,45 +986,93 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: Spacing.sm,
   },
-  addPlayerCard: {
-    padding: Spacing.md,
+  addPlayerButton: {
+    flexDirection: "row",
+    height: 48,
+    backgroundColor: AppColors.pitchGreen,
+    borderRadius: BorderRadius.md,
+    justifyContent: "center",
+    alignItems: "center",
     marginTop: Spacing.lg,
   },
-  addPlayerTitle: {
-    color: AppColors.textSecondary,
-    fontWeight: "600",
-    marginBottom: Spacing.sm,
-  },
-  addPlayerRow: {
-    flexDirection: "row",
-    gap: Spacing.sm,
-  },
-  newPlayerNameInput: {
+  oppositionContainer: {
     flex: 1,
-    height: 44,
+    position: "relative",
+  },
+  suggestionsDropdown: {
+    position: "absolute",
+    top: 44,
+    left: 0,
+    right: 0,
+    backgroundColor: AppColors.surface,
+    borderRadius: BorderRadius.sm,
+    borderWidth: 1,
+    borderColor: AppColors.elevated,
+    zIndex: 100,
+    elevation: 5,
+  },
+  suggestionItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: AppColors.elevated,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.7)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: Spacing.xl,
+  },
+  modalContent: {
+    backgroundColor: AppColors.surface,
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.xl,
+    width: "100%",
+    maxWidth: 340,
+  },
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: Spacing.xl,
+  },
+  modalInputGroup: {
+    marginBottom: Spacing.lg,
+  },
+  modalLabel: {
+    color: AppColors.textSecondary,
+    marginBottom: Spacing.xs,
+    fontWeight: "600",
+  },
+  modalInput: {
+    height: 48,
     backgroundColor: AppColors.elevated,
     borderRadius: BorderRadius.sm,
     paddingHorizontal: Spacing.md,
     fontSize: 16,
   },
-  newPlayerNumberInput: {
-    width: 56,
-    height: 44,
-    backgroundColor: AppColors.elevated,
-    borderRadius: BorderRadius.sm,
-    paddingHorizontal: Spacing.sm,
-    fontSize: 16,
-    textAlign: "center",
+  modalButtons: {
+    flexDirection: "row",
+    gap: Spacing.md,
+    marginTop: Spacing.md,
   },
-  addPlayerButton: {
-    width: 44,
-    height: 44,
-    backgroundColor: AppColors.pitchGreen,
-    borderRadius: BorderRadius.sm,
+  modalButton: {
+    flex: 1,
+    height: 48,
+    borderRadius: BorderRadius.md,
     justifyContent: "center",
     alignItems: "center",
   },
-  addPlayerButtonDisabled: {
+  modalButtonCancel: {
+    backgroundColor: AppColors.elevated,
+  },
+  modalButtonSave: {
+    backgroundColor: AppColors.pitchGreen,
+  },
+  modalButtonDisabled: {
     backgroundColor: AppColors.textDisabled,
   },
 });
