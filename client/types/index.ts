@@ -65,6 +65,9 @@ export interface Match {
   halfTimeTriggered?: boolean; // whether half time was triggered
   timerStartTimestamp?: number; // timestamp when timer was started (for accurate timing on iOS)
   accumulatedTime?: number; // accumulated time before current timer session
+  kickoffTimestamp?: number; // epoch timestamp when kickoff button was pressed
+  halfTimeMatchTime?: number; // match timer value (in seconds) when HT button was pressed
+  endMatchTime?: number; // match timer value (in seconds) when END button was pressed
 }
 
 export interface SubscriptionState {
