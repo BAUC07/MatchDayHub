@@ -48,14 +48,16 @@ MVP complete with core functionality:
 - Players can be removed
 
 ### Match Setup
-- Opposition name, location (home/away), format (5v5 to 11v11)
+- **Opposition Name**: Input with autocomplete suggestions from previously used team names
+- Location (home/away), format (5v5 to 11v11)
+- **Duration Auto-defaults**: Automatically sets based on format (5v5=40min, 7v7=50min, 9v9=60min, 11v11=90min)
 - **Auto-populated Lineup**: Starting lineup auto-filled based on format (5v5=5, 7v7=7, etc.)
 - Remaining players automatically assigned as substitutes
 - **Unavailable Players**: Mark players who can't make match day
   - Long-press any player to mark as unavailable
   - Tap to cycle: bench → starting (if space) → unavailable → bench
   - Drag players between Starting, Subs, and Unavailable zones
-- Add new players directly from match setup (useful for late arrivals)
+- **Add Player Modal**: Button triggers a modal popup for cleaner UI (name + optional squad number)
 - Unavailable players excluded from match data and don't record stats
 
 ### Live Match (Critical - No Scroll)
@@ -168,6 +170,11 @@ server/
 - Haptic feedback on all interactions
 
 ## Recent Changes
+- Match Setup improvements:
+  - Opposition name input now shows autocomplete suggestions from previously used team names
+  - Match duration auto-defaults based on format selection (5v5=40min, 7v7=50min, 9v9=60min, 11v11=90min)
+  - "Add Player" button now opens a modal popup instead of inline form for cleaner UI
+  - KeyboardAwareScrollView for proper keyboard handling on the form
 - Squad Editor now detects unsaved changes and prompts to save or discard when navigating away
 - Matches screen has team filter dropdown when multiple teams exist (shows match counts per team)
 - Enhanced delete team confirmation modal now shows team names and warns about permanent match data deletion
