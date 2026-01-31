@@ -395,27 +395,38 @@ export default function MatchSummaryScreen() {
               </ThemedText>
             </View>
 
-            {/* Match Events */}
-            {filteredEvents.map((event, index) => {
+            {/* Match Events with Half Time insertion */}
+            {(() => {
               const plannedHalf = ((match.plannedDuration || 90) / 2) * 60;
               const firstHalfAdded = match.firstHalfAddedTime || 0;
-              const halfTimePoint = plannedHalf + firstHalfAdded;
-              const isSecondHalf = event.timestamp > halfTimePoint;
-              const showHalfTimeBreakAfter = 
-                match.halfTimeTriggered && 
-                index < filteredEvents.length - 1 &&
-                !isSecondHalf &&
-                filteredEvents[index + 1].timestamp > halfTimePoint;
+              const halfTimePoint = match.halfTimeMatchTime || (plannedHalf + firstHalfAdded);
+              let htShown = false;
               
-              // Check if this is the last first-half event and we need HT break after
-              const isLastFirstHalfEvent = 
-                match.halfTimeTriggered &&
-                !isSecondHalf &&
-                (index === filteredEvents.length - 1 || filteredEvents[index + 1].timestamp > halfTimePoint);
+              const elements: React.ReactNode[] = [];
               
-              return (
-                <React.Fragment key={event.id}>
-                  <View style={styles.eventItem}>
+              filteredEvents.forEach((event, index) => {
+                const isAfterHT = event.timestamp > halfTimePoint;
+                
+                // Show HT entry before the first second-half event
+                if (match.halfTimeTriggered && isAfterHT && !htShown) {
+                  htShown = true;
+                  elements.push(
+                    <View key="halftime" style={styles.eventItem}>
+                      <ThemedText type="caption" style={styles.eventTime}>
+                        {match.halfTimeMatchTime 
+                          ? formatTimeWithAdded(match.halfTimeMatchTime, match.plannedDuration || 90, false)
+                          : "HT"}
+                      </ThemedText>
+                      <Feather name="pause" size={14} color={AppColors.textSecondary} />
+                      <ThemedText type="small" style={styles.eventDescription}>
+                        Half Time
+                      </ThemedText>
+                    </View>
+                  );
+                }
+                
+                elements.push(
+                  <View key={event.id} style={styles.eventItem}>
                     <ThemedText type="caption" style={styles.eventTime}>
                       {formatMatchTime(event.timestamp)}
                     </ThemedText>
@@ -475,55 +486,40 @@ export default function MatchSummaryScreen() {
                       </>
                     )}
                   </View>
-                  {showHalfTimeBreakAfter && (
-                    <View style={styles.eventItem}>
-                      <ThemedText type="caption" style={styles.eventTime}>
-                        {match.halfTimeMatchTime 
-                          ? formatTimeWithAdded(match.halfTimeMatchTime, match.plannedDuration || 90, false)
-                          : "HT"}
-                      </ThemedText>
-                      <Feather name="pause" size={14} color={AppColors.textSecondary} />
-                      <ThemedText type="small" style={styles.eventDescription}>
-                        Half Time
-                      </ThemedText>
-                    </View>
-                  )}
-                </React.Fragment>
-              );
-            })}
+                );
+              });
+              
+              // If HT was triggered but not shown (all events before HT or no second half events)
+              if (match.halfTimeTriggered && !htShown) {
+                elements.push(
+                  <View key="halftime" style={styles.eventItem}>
+                    <ThemedText type="caption" style={styles.eventTime}>
+                      {match.halfTimeMatchTime 
+                        ? formatTimeWithAdded(match.halfTimeMatchTime, match.plannedDuration || 90, false)
+                        : "HT"}
+                    </ThemedText>
+                    <Feather name="pause" size={14} color={AppColors.textSecondary} />
+                    <ThemedText type="small" style={styles.eventDescription}>
+                      Half Time
+                    </ThemedText>
+                  </View>
+                );
+              }
+              
+              return elements;
+            })()}
 
-            {/* Half Time (if no events or all events are before HT) */}
-            {match.halfTimeTriggered && (filteredEvents.length === 0 || 
-              filteredEvents.every(e => {
-                const plannedHalf = ((match.plannedDuration || 90) / 2) * 60;
-                const firstHalfAdded = match.firstHalfAddedTime || 0;
-                return e.timestamp <= plannedHalf + firstHalfAdded;
-              }) && !filteredEvents.some((e, i) => {
-                const plannedHalf = ((match.plannedDuration || 90) / 2) * 60;
-                const firstHalfAdded = match.firstHalfAddedTime || 0;
-                const isSecondHalf = e.timestamp > plannedHalf + firstHalfAdded;
-                return !isSecondHalf && i < filteredEvents.length - 1 && 
-                  filteredEvents[i + 1].timestamp > plannedHalf + firstHalfAdded;
-              })) && (
-              <View style={styles.eventItem}>
-                <ThemedText type="caption" style={styles.eventTime}>
-                  {match.halfTimeMatchTime 
-                    ? formatTimeWithAdded(match.halfTimeMatchTime, match.plannedDuration || 90, false)
-                    : "HT"}
-                </ThemedText>
-                <Feather name="pause" size={14} color={AppColors.textSecondary} />
-                <ThemedText type="small" style={styles.eventDescription}>
-                  Half Time
-                </ThemedText>
-              </View>
-            )}
-
-            {/* End Match */}
-            {match.isCompleted && (
+            {/* Full Time */}
+            {match.isCompleted ? (
               <View style={styles.eventItem}>
                 <ThemedText type="caption" style={styles.eventTime}>
                   {match.endMatchTime 
-                    ? formatTimeWithAdded(match.endMatchTime, match.plannedDuration || 90, true, match.firstHalfAddedTime || 0)
+                    ? formatTimeWithAdded(
+                        match.endMatchTime, 
+                        match.plannedDuration || 90, 
+                        match.halfTimeTriggered || false, 
+                        match.firstHalfAddedTime || 0
+                      )
                     : "FT"}
                 </ThemedText>
                 <Feather name="flag" size={14} color={AppColors.pitchGreen} />
@@ -531,11 +527,11 @@ export default function MatchSummaryScreen() {
                   Full Time
                 </ThemedText>
               </View>
-            )}
+            ) : null}
           </View>
 
           {/* Total Game Time */}
-          {match.isCompleted && (
+          {match.isCompleted ? (
             <View style={styles.totalTimeContainer}>
               <ThemedText type="caption" style={{ color: AppColors.textSecondary }}>
                 Total Game Time:
@@ -549,7 +545,7 @@ export default function MatchSummaryScreen() {
                 )}
               </ThemedText>
             </View>
-          )}
+          ) : null}
         </Card>
 
         <ThemedText type="h4" style={styles.sectionTitle}>
@@ -737,28 +733,6 @@ const styles = StyleSheet.create({
     height: 14,
     borderRadius: 2,
     marginTop: 2,
-  },
-  halfTimeBreak: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: Spacing.md,
-    gap: Spacing.md,
-  },
-  halfTimeBreakInline: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: Spacing.md,
-    gap: Spacing.md,
-    marginVertical: Spacing.xs,
-  },
-  halfTimeBreakLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: AppColors.textDisabled,
-  },
-  halfTimeBreakText: {
-    color: AppColors.textSecondary,
-    fontWeight: "600",
   },
   totalTimeContainer: {
     flexDirection: "row",

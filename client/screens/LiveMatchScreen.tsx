@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useRef } from "react";
+import React, { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import {
   View,
   StyleSheet,
@@ -281,9 +281,14 @@ export default function LiveMatchScreen() {
 
   useEffect(() => {
     const now = Date.now();
-    if (match && now - lastSaveRef.current > 5000) {
+    // Only do periodic saves for incomplete matches to avoid overwriting completed match data
+    if (match && !match.isCompleted && now - lastSaveRef.current > 5000) {
       lastSaveRef.current = now;
-      const currentTime = getCurrentMatchTime();
+      // Calculate current time inline to avoid dependency on getCurrentMatchTime callback
+      let currentTime = baseTime;
+      if (isRunning && timerStartTimestamp) {
+        currentTime = baseTime + Math.floor((Date.now() - timerStartTimestamp) / 1000);
+      }
       const updatedMatch = {
         ...match,
         totalMatchTime: currentTime,
@@ -296,7 +301,7 @@ export default function LiveMatchScreen() {
       };
       saveMatch(updatedMatch);
     }
-  }, [baseTime, timerStartTimestamp, match, isHalfTime, isSecondHalf, firstHalfAddedTime, secondHalfAddedTime, isRunning, getCurrentMatchTime]);
+  }, [baseTime, timerStartTimestamp, match, isHalfTime, isSecondHalf, firstHalfAddedTime, secondHalfAddedTime, isRunning]);
 
   const plannedDuration = (match?.plannedDuration || 60) * 60;
   const halfDuration = plannedDuration / 2;
@@ -653,8 +658,10 @@ export default function LiveMatchScreen() {
   const confirmEndMatch = useCallback(async () => {
     if (!match || !team) return;
     
+    // Calculate current time BEFORE stopping the timer
+    const currentTime = getCurrentMatchTime();
+    
     setShowEndConfirm(false);
-    setIsRunning(false);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
     const result =
@@ -664,12 +671,14 @@ export default function LiveMatchScreen() {
           ? "loss"
           : "draw";
 
-    const currentTime = getCurrentMatchTime();
     const updatedMatch: Match = {
       ...match,
       isCompleted: true,
       totalMatchTime: currentTime,
       endMatchTime: currentTime,
+      halfTimeTriggered: isSecondHalf,
+      firstHalfAddedTime: firstHalfAddedTime,
+      secondHalfAddedTime: secondHalfAddedTime,
     };
 
     const updatedTeam: Team = {
@@ -682,13 +691,20 @@ export default function LiveMatchScreen() {
     };
 
     try {
+      // Update local state to mark match as completed - this prevents periodic save from running
+      setMatch(updatedMatch);
+      // Save to storage
       await saveMatch(updatedMatch);
       await saveTeam(updatedTeam);
+      // Stop timer after save is complete
+      setIsRunning(false);
+      setTimerStartTimestamp(null);
+      // Navigate to summary
       navigation.replace("MatchSummary", { matchId: match.id });
     } catch (error) {
       console.error("Error ending match:", error);
     }
-  }, [match, team, getCurrentMatchTime, navigation]);
+  }, [match, team, getCurrentMatchTime, navigation, isSecondHalf, firstHalfAddedTime, secondHalfAddedTime]);
 
   const undoLastEvent = useCallback(() => {
     if (!match || match.events.length === 0) return;
@@ -724,9 +740,9 @@ export default function LiveMatchScreen() {
     ]);
   }, [match]);
 
-  const playersOnPitch = getPlayersOnPitch();
-  const substitutes = getSubstitutes();
-  const sentOffPlayers = getSentOffPlayers();
+  const playersOnPitch = useMemo(() => getPlayersOnPitch(), [getPlayersOnPitch]);
+  const substitutes = useMemo(() => getSubstitutes(), [getSubstitutes]);
+  const sentOffPlayers = useMemo(() => getSentOffPlayers(), [getSentOffPlayers]);
 
   const getDefaultPosition = useCallback((index: number, totalPlayers: number): { x: number; y: number } => {
     const cols = 4;

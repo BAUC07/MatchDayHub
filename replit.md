@@ -170,6 +170,11 @@ server/
 - Haptic feedback on all interactions
 
 ## Recent Changes
+- Fixed critical race condition in match completion:
+  - Periodic save effect was overwriting completed match data with isCompleted: false
+  - Solution: setMatch(updatedMatch) called before saveMatch to update local state first
+  - Periodic save now skips when match.isCompleted is true
+  - Timer stopped only after save is complete
 - Fixed team logo persistence: Logos are now saved to permanent storage instead of temporary cache
   - Images copied from picker to app's document directory
   - Logos persist across app restarts
