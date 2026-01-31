@@ -184,27 +184,41 @@ export default function MatchSummaryScreen() {
       });
     });
     
+    // Process substitutions and red cards chronologically
     const sortedEvents = [...match.events]
-      .filter(e => e.type === "substitution")
+      .filter(e => e.type === "substitution" || e.type === "card")
       .sort((a, b) => a.timestamp - b.timestamp);
     
     sortedEvents.forEach(event => {
-      if (event.type === "substitution" && event.playerOffId && event.playerOnId) {
-        const playerOff = stats.get(event.playerOffId);
-        const playerOn = stats.get(event.playerOnId);
-        
-        if (playerOff && playerOff.isOnPitch) {
-          playerOff.timeOnPitch += event.timestamp - playerOff.lastOnTime;
-          playerOff.isOnPitch = false;
+      if (event.type === "substitution") {
+        // Player going off
+        if (event.playerOffId) {
+          const playerOff = stats.get(event.playerOffId);
+          if (playerOff && playerOff.isOnPitch) {
+            playerOff.timeOnPitch += event.timestamp - playerOff.lastOnTime;
+            playerOff.isOnPitch = false;
+          }
         }
         
-        if (playerOn) {
-          playerOn.lastOnTime = event.timestamp;
-          playerOn.isOnPitch = true;
+        // Player coming on
+        if (event.playerOnId) {
+          const playerOn = stats.get(event.playerOnId);
+          if (playerOn) {
+            playerOn.lastOnTime = event.timestamp;
+            playerOn.isOnPitch = true;
+          }
+        }
+      } else if (event.type === "card" && event.cardType === "red" && event.playerId) {
+        // Red card - player is sent off, stop accruing minutes
+        const player = stats.get(event.playerId);
+        if (player && player.isOnPitch) {
+          player.timeOnPitch += event.timestamp - player.lastOnTime;
+          player.isOnPitch = false;
         }
       }
     });
     
+    // Add remaining time for players still on pitch at end of match
     stats.forEach((stat) => {
       if (stat.isOnPitch && stat.lastOnTime >= 0) {
         stat.timeOnPitch += totalTime - stat.lastOnTime;

@@ -172,6 +172,11 @@ server/
 - Haptic feedback on all interactions
 
 ## Recent Changes
+- Fixed player minutes calculation for substitutions and red cards:
+  - Substituted players: Minutes stop accruing when subbed off, start accruing when subbed on
+  - Red-carded players: Minutes stop accruing when sent off
+  - Supports re-substitution (player can come back on after being subbed off)
+  - Both StatsScreen and MatchSummaryScreen updated with same logic
 - Fixed critical race condition in match completion:
   - Periodic save effect was overwriting completed match data with isCompleted: false
   - Solution: setMatch(updatedMatch) called before saveMatch to update local state first

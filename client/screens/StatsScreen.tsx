@@ -519,34 +519,71 @@ export default function StatsScreen() {
     
     filteredMatches.forEach((match) => {
       const matchDuration = match.totalMatchTime / 60;
-      const playerTimes = new Map<string, { start: number; end: number }>();
       
+      // Track periods on pitch for each player: array of {start, end} intervals
+      const playerIntervals = new Map<string, { start: number; end: number }[]>();
+      // Track if player is currently on pitch and when they started
+      const currentlyOnPitch = new Map<string, number>();
+      
+      // Initialize starting lineup players as on pitch from minute 0
       match.startingLineup.forEach((playerId) => {
-        playerTimes.set(playerId, { start: 0, end: matchDuration });
+        currentlyOnPitch.set(playerId, 0);
+        playerIntervals.set(playerId, []);
       });
       
-      match.events
-        .filter((e) => e.type === "substitution")
-        .sort((a, b) => a.timestamp - b.timestamp)
-        .forEach((event) => {
-          const subTime = event.timestamp / 60;
-          if (event.playerOffId) {
-            const existing = playerTimes.get(event.playerOffId);
-            if (existing) {
-              existing.end = subTime;
+      // Process substitutions and red cards chronologically
+      const relevantEvents = match.events
+        .filter((e) => e.type === "substitution" || e.type === "card")
+        .sort((a, b) => a.timestamp - b.timestamp);
+      
+      relevantEvents.forEach((event) => {
+        const eventTime = event.timestamp / 60;
+        
+        if (event.type === "substitution") {
+          // Player going off - record their interval and mark as off pitch
+          if (event.playerOffId && currentlyOnPitch.has(event.playerOffId)) {
+            const startTime = currentlyOnPitch.get(event.playerOffId)!;
+            const intervals = playerIntervals.get(event.playerOffId) || [];
+            intervals.push({ start: startTime, end: eventTime });
+            playerIntervals.set(event.playerOffId, intervals);
+            currentlyOnPitch.delete(event.playerOffId);
+          }
+          
+          // Player coming on - mark as on pitch from this time
+          if (event.playerOnId) {
+            currentlyOnPitch.set(event.playerOnId, eventTime);
+            if (!playerIntervals.has(event.playerOnId)) {
+              playerIntervals.set(event.playerOnId, []);
             }
           }
-          if (event.playerOnId) {
-            playerTimes.set(event.playerOnId, { start: subTime, end: matchDuration });
+        } else if (event.type === "card" && event.cardType === "red") {
+          // Red card - player is sent off, record their interval
+          if (event.playerId && currentlyOnPitch.has(event.playerId)) {
+            const startTime = currentlyOnPitch.get(event.playerId)!;
+            const intervals = playerIntervals.get(event.playerId) || [];
+            intervals.push({ start: startTime, end: eventTime });
+            playerIntervals.set(event.playerId, intervals);
+            currentlyOnPitch.delete(event.playerId);
           }
-        });
+        }
+      });
       
-      playerTimes.forEach(({ start, end }, playerId) => {
-        const played = Math.max(0, end - start);
-        const current = minutesMap.get(playerId) || { minutes: 0, matches: 0 };
-        current.minutes += played;
-        current.matches += 1;
-        minutesMap.set(playerId, current);
+      // Close out intervals for players still on pitch at end of match
+      currentlyOnPitch.forEach((startTime, playerId) => {
+        const intervals = playerIntervals.get(playerId) || [];
+        intervals.push({ start: startTime, end: matchDuration });
+        playerIntervals.set(playerId, intervals);
+      });
+      
+      // Calculate total minutes for each player
+      playerIntervals.forEach((intervals, playerId) => {
+        const totalMinutes = intervals.reduce((sum, { start, end }) => sum + Math.max(0, end - start), 0);
+        if (totalMinutes > 0 || intervals.length > 0) {
+          const current = minutesMap.get(playerId) || { minutes: 0, matches: 0 };
+          current.minutes += totalMinutes;
+          current.matches += 1;
+          minutesMap.set(playerId, current);
+        }
       });
     });
 
