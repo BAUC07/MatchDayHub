@@ -1,5 +1,7 @@
 # MatchDay - Grassroots Football Match Logger
 
+**Version 1.1.0 (Build 5)**
+
 ## Overview
 A cross-platform mobile app (iOS and Android) for grassroots football managers to log match activity in real time. This is a pitch-side tool designed for fast, one-handed use under pressure.
 

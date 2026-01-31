@@ -2,7 +2,7 @@
   "expo": {
     "name": "MatchDay",
     "slug": "matchdayhub",
-    "version": "1.0.16",
+    "version": "1.1.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "matchday",
@@ -11,7 +11,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.442apps.matchdayhub",
-      "buildNumber": "4",
+      "buildNumber": "5",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
