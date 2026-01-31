@@ -74,11 +74,16 @@ function DraggablePlayer({ player, status, onDrop, onTap, onLongPress, columnLay
     const benchLayout = columnLayouts.current.bench;
     const unavailableLayout = columnLayouts.current.unavailable;
     
-    if (startingLayout && x < startingLayout.width + 20) {
-      onDrop(playerId, "starting");
-    } else if (unavailableLayout && absoluteY > unavailableLayout.y) {
+    // Check if dropped in unavailable section (below lineup area)
+    if (unavailableLayout && 
+        absoluteY >= unavailableLayout.y && 
+        absoluteY <= unavailableLayout.y + unavailableLayout.height) {
       onDrop(playerId, "unavailable");
+    } else if (startingLayout && x < startingLayout.width + 20) {
+      // Dropped in starting lineup column (left side)
+      onDrop(playerId, "starting");
     } else if (benchLayout) {
+      // Dropped in bench column (right side)
       onDrop(playerId, "bench");
     }
   };
