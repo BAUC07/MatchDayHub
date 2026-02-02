@@ -21,8 +21,8 @@ MatchDay is a cross-platform mobile application (iOS and Android) designed for g
     - **Match Setup**: Configure opposition, location, format (5v5 to 11v11), and duration. Features auto-populated lineups based on format, and the ability to mark players as unavailable with drag-and-drop functionality.
     - **Live Match**: Tabbed interface displaying match events timeline and team formation pitch diagram. Includes a 6-button grid for rapid event logging (goals, cards, penalties, substitutions, notes), a smart timer with half-time logic, and real-time timestamping of events. Supports red card management, re-substitution, and in-match player repositioning.
     - **Stats Tracking**: Provides detailed team and player statistics including results, goal sources, goals scored/conceded, top scorers/assists, cards received, and minutes played. Includes date range filtering and PDF export.
-    - **Match Summary**: Displays final score, key stats, and a detailed timeline of events.
-    - **Match Notes**: Functionality to add and edit match notes during and after games.
+    - **Match Summary**: Displays final score, key stats, detailed timeline of events, and match notes at the bottom.
+    - **Match Notes**: Add notes during live matches via Notes button; notes display on Match Summary screen.
 
 ### Backend (Express.js)
 - Serves static Expo files for web and manifest for mobile applications.
@@ -43,3 +43,19 @@ MatchDay is a cross-platform mobile application (iOS and Android) designed for g
 - **Expo**: The development platform and framework for React Native.
 - **Express.js**: Backend web application framework for serving files.
 - **RevenueCat**: Integrated for future in-app purchases, currently used for code-based feature unlocks.
+
+## Version History
+
+### v1.2.0 (2026-02-02)
+- Added Match Notes feature: Notes button on Live Match screen opens modal with auto-save
+- Notes now display at bottom of Match Summary screen (removed from Match History)
+- Implemented expandable Team Formation view: compact horizontal (read-only) by default, tap to expand to vertical editable view
+- Second yellow card now shows as single event with diagonal split icon (red/yellow)
+- Fixed player state tap cycling (starting → unavailable → bench)
+
+### v1.1.0
+- Redesigned Live Match screen with tabbed interface (Match Events / Team Formation)
+- Added smart timer with half-time logic and timestamp-based timing
+- Implemented penalty 3-step flow with team selection and outcome tracking
+- Added Stats screen with team/player statistics and PDF export
+- Fixed player minutes calculation for substitutions and red cards
