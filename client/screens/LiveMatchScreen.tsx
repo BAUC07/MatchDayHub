@@ -34,9 +34,8 @@ type LiveMatchRouteProp = RouteProp<RootStackParamList, "LiveMatch">;
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
 type ActionType = "goal_for" | "goal_against" | "card" | "penalty" | "sub";
+type TabType = "events" | "formation";
 
-// LiveTimer: Standalone component with isolated state management
-// NOT wrapped in React.memo - manages its own re-renders independently
 interface LiveTimerProps {
   startTimestamp: number | null;
   isRunning: boolean;
@@ -54,10 +53,8 @@ function LiveTimer({
   isSecondHalf, 
   firstHalfAddedTime 
 }: LiveTimerProps) {
-  // Counter to force component re-renders every second (value unused but state change triggers re-render)
   const [, setTick] = useState(0);
   
-  // Timer that updates state every second to force re-renders and recalculate elapsed time
   useEffect(() => {
     if (isRunning) {
       const id = setInterval(() => {
@@ -67,7 +64,6 @@ function LiveTimer({
     }
   }, [isRunning, startTimestampProp]);
   
-  // Calculate elapsed time from timestamp on each render
   const now = Date.now();
   let matchTime: number;
   if (!isRunning || !startTimestampProp) {
@@ -80,7 +76,6 @@ function LiveTimer({
   const halfMins = Math.floor(halfDuration / 60);
   const fullMins = Math.floor(plannedDuration / 60);
   
-  // Format time for display
   const formatTime = (seconds: number): string => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
@@ -211,15 +206,12 @@ export default function LiveMatchScreen() {
   const [team, setTeam] = useState<Team | null>(null);
   const [loading, setLoading] = useState(true);
   const [isRunning, setIsRunning] = useState(false);
-  const [baseTime, setBaseTime] = useState(0); // Accumulated time when timer was last stopped
-  const [timerStartTimestamp, setTimerStartTimestamp] = useState<number | null>(null); // When timer was started (state, not ref)
-  
-  // Debug: Log on every render
-  console.log('[Render] LiveMatchScreen rendered, isRunning:', isRunning, 'baseTime:', baseTime, 'startTimestamp:', timerStartTimestamp);
+  const [baseTime, setBaseTime] = useState(0);
+  const [timerStartTimestamp, setTimerStartTimestamp] = useState<number | null>(null);
+  const [activeTab, setActiveTab] = useState<TabType>("events");
   
   const [showActionSheet, setShowActionSheet] = useState(false);
   const [currentAction, setCurrentAction] = useState<ActionType | null>(null);
-  const [showTimeline, setShowTimeline] = useState(false);
   const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
   const [showEndConfirm, setShowEndConfirm] = useState(false);
   const [showSecondYellowConfirm, setShowSecondYellowConfirm] = useState(false);
@@ -243,7 +235,6 @@ export default function LiveMatchScreen() {
         setFirstHalfAddedTime(matchData.firstHalfAddedTime || 0);
         setSecondHalfAddedTime(matchData.secondHalfAddedTime || 0);
         
-        // Restore timer state - if timer was running, restore using state
         if (matchData.timerStartTimestamp && !matchData.isHalfTime && !matchData.isCompleted) {
           setBaseTime(matchData.accumulatedTime || 0);
           setTimerStartTimestamp(matchData.timerStartTimestamp);
@@ -267,10 +258,6 @@ export default function LiveMatchScreen() {
     loadData();
   }, [loadData]);
 
-  // Timer display is now handled by LiveTimer component - no need for parent timer effect
-  // LiveTimer manages its own re-renders and calculates time from startTimestamp
-
-  // Helper to calculate current match time
   const getCurrentMatchTime = useCallback(() => {
     if (!isRunning || !timerStartTimestamp) {
       return baseTime;
@@ -281,10 +268,8 @@ export default function LiveMatchScreen() {
 
   useEffect(() => {
     const now = Date.now();
-    // Only do periodic saves for incomplete matches to avoid overwriting completed match data
     if (match && !match.isCompleted && now - lastSaveRef.current > 5000) {
       lastSaveRef.current = now;
-      // Calculate current time inline to avoid dependency on getCurrentMatchTime callback
       let currentTime = baseTime;
       if (isRunning && timerStartTimestamp) {
         currentTime = baseTime + Math.floor((Date.now() - timerStartTimestamp) / 1000);
@@ -306,13 +291,10 @@ export default function LiveMatchScreen() {
   const plannedDuration = (match?.plannedDuration || 60) * 60;
   const halfDuration = plannedDuration / 2;
 
-  // getTimeDisplay removed - LiveTimer component handles time display
-
   const handleToggleClock = useCallback(async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     
     if (isHalfTime) {
-      // Resuming from half-time into second half
       const currentTime = getCurrentMatchTime();
       setIsHalfTime(false);
       setIsSecondHalf(true);
@@ -320,19 +302,16 @@ export default function LiveMatchScreen() {
     }
     
     if (!isRunning) {
-      // Starting the timer
       const now = Date.now();
       setTimerStartTimestamp(now);
       setIsRunning(true);
       
-      // Record kickoff timestamp if this is the first start (baseTime is 0)
       if (baseTime === 0 && match && !match.kickoffTimestamp) {
         const updatedMatch = { ...match, kickoffTimestamp: now };
         setMatch(updatedMatch);
         await saveMatch(updatedMatch);
       }
     } else {
-      // Stopping the timer - accumulate elapsed time
       if (timerStartTimestamp) {
         const elapsed = Math.floor((Date.now() - timerStartTimestamp) / 1000);
         setBaseTime(prev => prev + elapsed);
@@ -342,24 +321,26 @@ export default function LiveMatchScreen() {
     }
   }, [isHalfTime, isRunning, timerStartTimestamp, getCurrentMatchTime, halfDuration, baseTime, match]);
 
-  const handleHalfTime = useCallback(async () => {
+  const handleHalfTimeOrEnd = useCallback(async () => {
     const currentTime = getCurrentMatchTime();
     
+    if (isSecondHalf) {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      setShowEndConfirm(true);
+      return;
+    }
+    
     if (isHalfTime) {
-      // During half time, clicking HT starts the second half
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setIsHalfTime(false);
       setIsSecondHalf(true);
       if (currentTime > halfDuration) {
         setFirstHalfAddedTime(currentTime - halfDuration);
       }
-      // Start the timer for second half
       setTimerStartTimestamp(Date.now());
       setIsRunning(true);
-    } else if (!isSecondHalf) {
-      // During first half, trigger half time break
+    } else {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      // Stop the timer and save accumulated time
       if (timerStartTimestamp) {
         const elapsed = Math.floor((Date.now() - timerStartTimestamp) / 1000);
         setBaseTime(prev => prev + elapsed);
@@ -371,7 +352,6 @@ export default function LiveMatchScreen() {
       const htAddedTime = currentTime > halfDuration ? currentTime - halfDuration : 0;
       setFirstHalfAddedTime(htAddedTime);
       
-      // Record the half time match time
       if (match) {
         const updatedMatch = { ...match, halfTimeMatchTime: currentTime };
         setMatch(updatedMatch);
@@ -383,7 +363,6 @@ export default function LiveMatchScreen() {
   const handlePauseLongPress = useCallback(() => {
     if (isRunning) {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-      // Stop the timer and save accumulated time
       if (timerStartTimestamp) {
         const elapsed = Math.floor((Date.now() - timerStartTimestamp) / 1000);
         setBaseTime(prev => prev + elapsed);
@@ -447,8 +426,6 @@ export default function LiveMatchScreen() {
         if (e.playerOnId) onPitchIds.add(e.playerOnId);
       });
 
-    // Include both original subs AND players who were subbed off (now available again)
-    // Exclude sent-off players
     const availablePlayerIds = new Set([...match.substitutes, ...match.startingLineup]);
     return team.players.filter(
       (p) => !onPitchIds.has(p.id) && availablePlayerIds.has(p.id) && !sentOffIds.has(p.id)
@@ -523,11 +500,9 @@ export default function LiveMatchScreen() {
 
   const handleCard = useCallback(
     async (player: Player, cardType: CardType) => {
-      // Check if this is a second yellow card
       if (cardType === "yellow") {
         const yellowCount = getPlayerYellowCardCount(player.id);
         if (yellowCount >= 1) {
-          // This is a second yellow - show confirmation
           setPendingSecondYellowPlayer(player);
           setShowActionSheet(false);
           setShowSecondYellowConfirm(true);
@@ -550,7 +525,6 @@ export default function LiveMatchScreen() {
     
     const currentTime = getCurrentMatchTime();
     
-    // Create both events with the same timestamp
     const yellowEvent: MatchEvent = {
       id: generateId(),
       type: "card",
@@ -567,7 +541,6 @@ export default function LiveMatchScreen() {
       cardType: "red",
     };
     
-    // Add both events in a single update to ensure state consistency
     const updatedMatch = {
       ...match,
       events: [...match.events, yellowEvent, redEvent],
@@ -649,16 +622,9 @@ export default function LiveMatchScreen() {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   }, [match]);
 
-  const handleEndMatch = useCallback(() => {
-    if (!match || !team) return;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    setShowEndConfirm(true);
-  }, [match, team]);
-
   const confirmEndMatch = useCallback(async () => {
     if (!match || !team) return;
     
-    // Calculate current time BEFORE stopping the timer
     const currentTime = getCurrentMatchTime();
     
     setShowEndConfirm(false);
@@ -691,15 +657,11 @@ export default function LiveMatchScreen() {
     };
 
     try {
-      // Update local state to mark match as completed - this prevents periodic save from running
       setMatch(updatedMatch);
-      // Save to storage
       await saveMatch(updatedMatch);
       await saveTeam(updatedTeam);
-      // Stop timer after save is complete
       setIsRunning(false);
       setTimerStartTimestamp(null);
-      // Navigate to summary
       navigation.replace("MatchSummary", { matchId: match.id });
     } catch (error) {
       console.error("Error ending match:", error);
@@ -791,6 +753,61 @@ export default function LiveMatchScreen() {
     setPitchDimensions({ width, height });
   }, []);
 
+  const getPlayerName = (id?: string) => {
+    if (!id || !team) return "";
+    const player = team.players.find((p) => p.id === id);
+    return player?.name || "Unknown";
+  };
+
+  const formatGoalType = (goalType?: GoalType) => {
+    if (!goalType) return "";
+    return goalType.replace("_", " ");
+  };
+
+  const formatRealTime = (timestamp: number): string => {
+    if (!match?.kickoffTimestamp) return formatMatchTime(timestamp);
+    const eventTime = new Date(match.kickoffTimestamp + timestamp * 1000);
+    return eventTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  };
+
+  const getEventIcon = (event: MatchEvent) => {
+    switch (event.type) {
+      case "goal_for":
+        return <Feather name="target" size={16} color={AppColors.pitchGreen} />;
+      case "goal_against":
+        return <Feather name="target" size={16} color={AppColors.redCard} />;
+      case "card":
+        return (
+          <View style={{ width: 12, height: 16, backgroundColor: event.cardType === "yellow" ? AppColors.warningYellow : AppColors.redCard, borderRadius: 2 }} />
+        );
+      case "substitution":
+        return <Feather name="refresh-cw" size={16} color={AppColors.textSecondary} />;
+      case "penalty":
+        return <Feather name="circle" size={16} color={AppColors.warningYellow} />;
+      default:
+        return null;
+    }
+  };
+
+  const getEventText = (event: MatchEvent) => {
+    switch (event.type) {
+      case "goal_for":
+        const assistText = event.assistPlayerId ? ` (assist: ${getPlayerName(event.assistPlayerId)})` : "";
+        const goalTypeText = event.goalType ? ` - ${formatGoalType(event.goalType)}` : "";
+        return `Goal: ${getPlayerName(event.playerId)}${assistText}${goalTypeText}`;
+      case "goal_against":
+        return `Goal conceded (${formatGoalType(event.goalType)})`;
+      case "card":
+        return `${event.cardType === "yellow" ? "Yellow" : "Red"} card: ${getPlayerName(event.playerId)}`;
+      case "substitution":
+        return `Sub: ${getPlayerName(event.playerOnId)} on for ${getPlayerName(event.playerOffId)}`;
+      case "penalty":
+        return `Penalty ${event.isForTeam ? "for" : "against"}: ${event.penaltyOutcome}`;
+      default:
+        return "";
+    }
+  };
+
   if (loading || !match || !team) {
     return (
       <View style={[styles.container, { backgroundColor: AppColors.darkBg }]}>
@@ -803,181 +820,236 @@ export default function LiveMatchScreen() {
     );
   }
 
+  const getHtButtonText = () => {
+    if (isSecondHalf) return "END";
+    if (isHalfTime) return "2nd";
+    return "HT";
+  };
+
   return (
     <View style={[styles.container, { backgroundColor: AppColors.darkBg }]}>
-      <View style={[styles.topBar, { paddingTop: insets.top + Spacing.sm }]}>
-        <View style={styles.topBarLeft}>
-          <Pressable
-            onPress={() => setShowTimeline(true)}
-            hitSlop={8}
-            style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}
-          >
-            <Feather name="list" size={22} color={AppColors.textSecondary} />
-          </Pressable>
-        </View>
-
-        <View style={styles.scoreSection}>
-          <ThemedText type="h1" style={styles.scoreText}>
-            {match.scoreFor}
+      <View style={[styles.header, { paddingTop: insets.top + Spacing.sm }]}>
+        <View style={styles.teamsHeader}>
+          <ThemedText type="body" style={styles.teamName} numberOfLines={1}>
+            {team.name}
           </ThemedText>
-          <ThemedText type="h3" style={styles.scoreDivider}>
-            -
-          </ThemedText>
-          <ThemedText type="h1" style={styles.scoreText}>
-            {match.scoreAgainst}
+          <ThemedText type="small" style={styles.vsText}>VS</ThemedText>
+          <ThemedText type="body" style={styles.teamName} numberOfLines={1}>
+            {match.opposition}
           </ThemedText>
         </View>
 
-        <View style={styles.topBarRight}>
+        <View style={styles.scoreRow}>
+          <View style={styles.scoreCircle}>
+            <ThemedText type="h1" style={styles.scoreNumber}>{match.scoreFor}</ThemedText>
+          </View>
+          <ThemedText type="h3" style={styles.scoreDash}>-</ThemedText>
+          <View style={styles.scoreCircle}>
+            <ThemedText type="h1" style={styles.scoreNumber}>{match.scoreAgainst}</ThemedText>
+          </View>
+        </View>
+
+        <View style={styles.timerRow}>
+          <LiveTimer
+            startTimestamp={timerStartTimestamp}
+            isRunning={isRunning}
+            baseTime={baseTime}
+            plannedDuration={(match?.plannedDuration || 60) * 60}
+            isSecondHalf={isSecondHalf}
+            firstHalfAddedTime={firstHalfAddedTime}
+          />
           <Pressable
-            onPress={undoLastEvent}
-            disabled={match.events.length === 0}
-            hitSlop={8}
-            style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}
+            onPress={handleToggleClock}
+            onLongPress={handlePauseLongPress}
+            delayLongPress={800}
+            style={({ pressed }) => [
+              styles.playPauseButton,
+              { opacity: pressed ? 0.8 : 1 },
+            ]}
           >
             <Feather
-              name="rotate-ccw"
+              name={isRunning ? "pause" : "play"}
               size={20}
-              color={
-                match.events.length > 0
-                  ? AppColors.textSecondary
-                  : AppColors.textDisabled
-              }
+              color="#FFFFFF"
             />
           </Pressable>
+          <Pressable
+            style={({ pressed }) => [
+              styles.htButton,
+              isSecondHalf ? styles.endButtonStyle : styles.htButtonStyle,
+              { opacity: pressed ? 0.8 : 1 },
+            ]}
+            onPress={handleHalfTimeOrEnd}
+          >
+            <ThemedText type="body" style={styles.htButtonText}>
+              {getHtButtonText()}
+            </ThemedText>
+          </Pressable>
         </View>
+
+        {isHalfTime ? (
+          <View style={styles.halfTimeIndicator}>
+            <ThemedText type="small" style={styles.halfTimeText}>HALF TIME</ThemedText>
+          </View>
+        ) : (
+          <View style={styles.periodIndicator}>
+            <ThemedText type="small" style={{ color: AppColors.textSecondary }}>
+              {isSecondHalf ? "2nd Half" : "1st Half"}
+            </ThemedText>
+          </View>
+        )}
       </View>
 
-      <View style={styles.clockSection}>
-        <LiveTimer
-          startTimestamp={timerStartTimestamp}
-          isRunning={isRunning}
-          baseTime={baseTime}
-          plannedDuration={(match?.plannedDuration || 60) * 60}
-          isSecondHalf={isSecondHalf}
-          firstHalfAddedTime={firstHalfAddedTime}
-        />
+      <View style={styles.tabBar}>
         <Pressable
-          onPress={handleToggleClock}
-          onLongPress={handlePauseLongPress}
-          delayLongPress={800}
-          style={({ pressed }) => [
-            styles.clockButton,
-            { opacity: pressed ? 0.8 : 1 },
-          ]}
+          style={[styles.tab, activeTab === "events" && styles.tabActive]}
+          onPress={() => { Haptics.selectionAsync(); setActiveTab("events"); }}
         >
-          <Feather
-            name={isRunning ? "pause" : "play"}
-            size={20}
-            color="#FFFFFF"
-          />
+          <ThemedText type="body" style={[styles.tabText, activeTab === "events" && styles.tabTextActive]}>
+            Match Events
+          </ThemedText>
+        </Pressable>
+        <Pressable
+          style={[styles.tab, activeTab === "formation" && styles.tabActive]}
+          onPress={() => { Haptics.selectionAsync(); setActiveTab("formation"); }}
+        >
+          <ThemedText type="body" style={[styles.tabText, activeTab === "formation" && styles.tabTextActive]}>
+            Team Formation
+          </ThemedText>
         </Pressable>
       </View>
 
-      {isHalfTime ? (
-        <View style={styles.halfTimeIndicator}>
-          <ThemedText type="body" style={styles.halfTimeText}>HALF TIME</ThemedText>
-        </View>
-      ) : (
-        <View style={styles.periodIndicator}>
-          <ThemedText type="small" style={{ color: AppColors.textSecondary }}>
-            {isSecondHalf ? "2nd Half" : "1st Half"}
-          </ThemedText>
-        </View>
-      )}
-
-      <View style={styles.teamsRow}>
-        <ThemedText type="small" style={styles.teamLabel}>
-          {team.name}
-        </ThemedText>
-        <ThemedText type="small" style={styles.vsLabel}>
-          vs
-        </ThemedText>
-        <ThemedText type="small" style={styles.teamLabel}>
-          {match.opposition}
-        </ThemedText>
-      </View>
-
-      <View style={styles.middleZone}>
-        <View style={styles.pitchContainer}>
-          <View style={styles.pitch} onLayout={handlePitchLayout}>
-            <View style={styles.pitchCenterCircle} />
-            <View style={styles.pitchCenterLine} />
-            <View style={styles.pitchGoalAreaTop} />
-            <View style={styles.pitchGoalAreaBottom} />
-
-            <View style={styles.playersGrid}>
-              {playersOnPitch.map((player) => {
-                const pos = playerPositions.find(p => p.playerId === player.id);
-                if (!pos) return null;
-                return (
-                  <DraggablePlayer
-                    key={player.id}
-                    player={player}
-                    position={{ x: pos.x, y: pos.y }}
-                    pitchDimensions={pitchDimensions}
-                    onPositionChange={updatePlayerPosition}
-                    onTap={() => {
-                      setSelectedPlayer(player);
-                      setCurrentAction("goal_for");
-                      setShowActionSheet(true);
-                    }}
-                  />
-                );
-              })}
-            </View>
-          </View>
-        </View>
-
-        <View style={styles.benchContainer}>
-          <ThemedText type="small" style={styles.benchLabel}>
-            BENCH
-          </ThemedText>
-          <FlatList
-            horizontal
-            data={substitutes}
-            keyExtractor={(item) => item.id}
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.benchList}
-            renderItem={({ item }) => (
-              <View style={styles.benchPlayer}>
-                <ThemedText type="small" style={styles.benchPlayerText}>
-                  {getPlayerDisplayName(item)}
+      <View style={styles.tabContent}>
+        {activeTab === "events" ? (
+          <View style={styles.eventsContainer}>
+            {match.events.length === 0 ? (
+              <View style={styles.emptyEvents}>
+                <Feather name="clock" size={40} color={AppColors.textDisabled} />
+                <ThemedText type="body" style={{ color: AppColors.textDisabled, marginTop: Spacing.md }}>
+                  No events yet
+                </ThemedText>
+                <ThemedText type="small" style={{ color: AppColors.textDisabled }}>
+                  Use the buttons below to log match events
                 </ThemedText>
               </View>
+            ) : (
+              <FlatList
+                data={[...match.events].reverse()}
+                keyExtractor={(item) => item.id}
+                showsVerticalScrollIndicator={true}
+                contentContainerStyle={styles.eventsList}
+                renderItem={({ item }) => (
+                  <Swipeable
+                    renderRightActions={() => (
+                      <Pressable
+                        style={styles.deleteEventAction}
+                        onPress={() => handleDeleteMatchEvent(item.id)}
+                      >
+                        <Feather name="trash-2" size={18} color="#FFFFFF" />
+                      </Pressable>
+                    )}
+                    overshootRight={false}
+                    friction={2}
+                  >
+                    <View style={styles.eventItem}>
+                      <ThemedText type="body" style={styles.eventTime}>
+                        {formatRealTime(item.timestamp)}
+                      </ThemedText>
+                      <View style={styles.eventIconWrapper}>
+                        {getEventIcon(item)}
+                      </View>
+                      <ThemedText type="small" style={styles.eventText} numberOfLines={2}>
+                        {getEventText(item)}
+                      </ThemedText>
+                    </View>
+                  </Swipeable>
+                )}
+              />
             )}
-            ListEmptyComponent={
-              <ThemedText
-                type="small"
-                style={{ color: AppColors.textDisabled }}
-              >
-                No subs available
-              </ThemedText>
-            }
-          />
-        </View>
-
-        {sentOffPlayers.length > 0 ? (
-          <View style={styles.sentOffContainer}>
-            <ThemedText type="small" style={styles.sentOffLabel}>
-              SENT OFF
-            </ThemedText>
-            <FlatList
-              horizontal
-              data={sentOffPlayers}
-              keyExtractor={(item) => item.id}
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.sentOffList}
-              renderItem={({ item }) => (
-                <View style={styles.sentOffPlayer}>
-                  <ThemedText type="small" style={styles.sentOffPlayerText}>
-                    {getPlayerDisplayName(item)}
-                  </ThemedText>
-                </View>
-              )}
-            />
           </View>
-        ) : null}
+        ) : (
+          <View style={styles.formationContainer}>
+            <View style={styles.pitchContainer}>
+              <View style={styles.pitch} onLayout={handlePitchLayout}>
+                <View style={styles.pitchCenterCircle} />
+                <View style={styles.pitchCenterLine} />
+                <View style={styles.pitchGoalAreaTop} />
+                <View style={styles.pitchGoalAreaBottom} />
+
+                <View style={styles.playersGrid}>
+                  {playersOnPitch.map((player) => {
+                    const pos = playerPositions.find(p => p.playerId === player.id);
+                    if (!pos) return null;
+                    return (
+                      <DraggablePlayer
+                        key={player.id}
+                        player={player}
+                        position={{ x: pos.x, y: pos.y }}
+                        pitchDimensions={pitchDimensions}
+                        onPositionChange={updatePlayerPosition}
+                        onTap={() => {
+                          setSelectedPlayer(player);
+                          setCurrentAction("goal_for");
+                          setShowActionSheet(true);
+                        }}
+                      />
+                    );
+                  })}
+                </View>
+              </View>
+            </View>
+
+            <View style={styles.benchContainer}>
+              <ThemedText type="small" style={styles.benchLabel}>
+                BENCH
+              </ThemedText>
+              <FlatList
+                horizontal
+                data={substitutes}
+                keyExtractor={(item) => item.id}
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.benchList}
+                renderItem={({ item }) => (
+                  <View style={styles.benchPlayer}>
+                    <ThemedText type="small" style={styles.benchPlayerText}>
+                      {getPlayerDisplayName(item)}
+                    </ThemedText>
+                  </View>
+                )}
+                ListEmptyComponent={
+                  <ThemedText
+                    type="small"
+                    style={{ color: AppColors.textDisabled }}
+                  >
+                    No subs available
+                  </ThemedText>
+                }
+              />
+            </View>
+
+            {sentOffPlayers.length > 0 ? (
+              <View style={styles.sentOffContainer}>
+                <ThemedText type="small" style={styles.sentOffLabel}>
+                  SENT OFF
+                </ThemedText>
+                <FlatList
+                  horizontal
+                  data={sentOffPlayers}
+                  keyExtractor={(item) => item.id}
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.sentOffList}
+                  renderItem={({ item }) => (
+                    <View style={styles.sentOffPlayer}>
+                      <ThemedText type="small" style={styles.sentOffPlayerText}>
+                        {getPlayerDisplayName(item)}
+                      </ThemedText>
+                    </View>
+                  )}
+                />
+              </View>
+            ) : null}
+          </View>
+        )}
       </View>
 
       <View style={[styles.bottomBar, { paddingBottom: insets.bottom + Spacing.sm }]}>
@@ -990,8 +1062,9 @@ export default function LiveMatchScreen() {
             ]}
             onPress={() => openActionSheet("goal_for")}
           >
+            <Feather name="plus" size={16} color="#FFFFFF" style={{ marginRight: 4 }} />
             <ThemedText type="body" style={styles.actionButtonText}>
-              GOAL +
+              Goal
             </ThemedText>
           </Pressable>
 
@@ -1003,8 +1076,9 @@ export default function LiveMatchScreen() {
             ]}
             onPress={() => openActionSheet("goal_against")}
           >
+            <Feather name="minus" size={16} color="#FFFFFF" style={{ marginRight: 4 }} />
             <ThemedText type="body" style={styles.actionButtonText}>
-              GOAL -
+              Goal
             </ThemedText>
           </Pressable>
 
@@ -1016,8 +1090,8 @@ export default function LiveMatchScreen() {
             ]}
             onPress={() => openActionSheet("card")}
           >
-            <ThemedText type="body" style={styles.actionButtonText}>
-              CARD
+            <ThemedText type="body" style={[styles.actionButtonText, { color: "#000" }]}>
+              Card
             </ThemedText>
           </Pressable>
         </View>
@@ -1026,39 +1100,42 @@ export default function LiveMatchScreen() {
           <Pressable
             style={({ pressed }) => [
               styles.actionButton,
+              styles.penaltyForButton,
+              { opacity: pressed ? 0.9 : 1 },
+            ]}
+            onPress={() => openActionSheet("penalty")}
+          >
+            <Feather name="plus" size={16} color="#FFFFFF" style={{ marginRight: 4 }} />
+            <ThemedText type="body" style={styles.actionButtonText}>
+              Penalty
+            </ThemedText>
+          </Pressable>
+
+          <Pressable
+            style={({ pressed }) => [
+              styles.actionButton,
+              styles.penaltyAgainstButton,
+              { opacity: pressed ? 0.9 : 1 },
+            ]}
+            onPress={() => openActionSheet("penalty")}
+          >
+            <Feather name="minus" size={16} color="#FFFFFF" style={{ marginRight: 4 }} />
+            <ThemedText type="body" style={styles.actionButtonText}>
+              Penalty
+            </ThemedText>
+          </Pressable>
+
+          <Pressable
+            style={({ pressed }) => [
+              styles.actionButton,
               styles.subButton,
               { opacity: pressed ? 0.9 : 1 },
             ]}
             onPress={() => openActionSheet("sub")}
           >
+            <Feather name="refresh-cw" size={16} color="#FFFFFF" style={{ marginRight: 4 }} />
             <ThemedText type="body" style={styles.actionButtonText}>
-              SUB
-            </ThemedText>
-          </Pressable>
-
-          <Pressable
-            style={({ pressed }) => [
-              styles.actionButton,
-              styles.penaltyButton,
-              { opacity: pressed ? 0.9 : 1 },
-            ]}
-            onPress={() => openActionSheet("penalty")}
-          >
-            <ThemedText type="body" style={styles.actionButtonText}>
-              PENALTY
-            </ThemedText>
-          </Pressable>
-
-          <Pressable
-            style={({ pressed }) => [
-              styles.actionButton,
-              isSecondHalf ? styles.endButton : styles.halfTimeButton,
-              { opacity: pressed ? 0.9 : 1 },
-            ]}
-            onPress={isSecondHalf ? handleEndMatch : handleHalfTime}
-          >
-            <ThemedText type="body" style={styles.actionButtonText}>
-              {isSecondHalf ? "END" : isHalfTime ? "2nd" : "HT"}
+              Sub
             </ThemedText>
           </Pressable>
         </View>
@@ -1076,14 +1153,6 @@ export default function LiveMatchScreen() {
         onCard={handleCard}
         onSubstitution={handleSubstitution}
         onPenalty={handlePenalty}
-      />
-
-      <TimelineSheet
-        visible={showTimeline}
-        events={match.events}
-        players={team.players}
-        onClose={() => setShowTimeline(false)}
-        onDeleteEvent={handleDeleteMatchEvent}
       />
 
       <Modal visible={showEndConfirm} transparent animationType="fade" onRequestClose={() => setShowEndConfirm(false)}>
@@ -1421,161 +1490,49 @@ function ActionSheet({
   );
 }
 
-interface TimelineSheetProps {
-  visible: boolean;
-  events: MatchEvent[];
-  players: Player[];
-  onClose: () => void;
-  onDeleteEvent?: (eventId: string) => void;
-}
-
-function TimelineSheet({ visible, events, players, onClose, onDeleteEvent }: TimelineSheetProps) {
-  const insets = useSafeAreaInsets();
-  const [hideSubs, setHideSubs] = useState(false);
-
-  const filteredEvents = hideSubs ? events.filter(e => e.type !== "substitution") : events;
-
-  const getPlayerName = (id?: string) => {
-    if (!id) return "";
-    const player = players.find((p) => p.id === id);
-    return player?.name || "Unknown";
-  };
-
-  const formatGoalType = (goalType?: GoalType) => {
-    if (!goalType) return "";
-    return goalType.replace("_", " ");
-  };
-
-  const getEventIcon = (event: MatchEvent) => {
-    switch (event.type) {
-      case "goal_for":
-        return <Feather name="target" size={16} color={AppColors.pitchGreen} />;
-      case "goal_against":
-        return <Feather name="target" size={16} color={AppColors.redCard} />;
-      case "card":
-        return (
-          <View style={{ width: 12, height: 16, backgroundColor: event.cardType === "yellow" ? AppColors.warningYellow : AppColors.redCard, borderRadius: 2 }} />
-        );
-      case "substitution":
-        return <Feather name="refresh-cw" size={16} color={AppColors.textSecondary} />;
-      case "penalty":
-        return <Feather name="circle" size={16} color={AppColors.warningYellow} />;
-      default:
-        return null;
-    }
-  };
-
-  const getEventText = (event: MatchEvent) => {
-    switch (event.type) {
-      case "goal_for":
-        const assistText = event.assistPlayerId ? ` (assist: ${getPlayerName(event.assistPlayerId)})` : "";
-        const goalTypeText = event.goalType ? ` - ${formatGoalType(event.goalType)}` : "";
-        return `Goal: ${getPlayerName(event.playerId)}${assistText}${goalTypeText}`;
-      case "goal_against":
-        return `Goal conceded (${formatGoalType(event.goalType)})`;
-      case "card":
-        return `${event.cardType === "yellow" ? "Yellow" : "Red"} card: ${getPlayerName(event.playerId)}`;
-      case "substitution":
-        return `Sub: ${getPlayerName(event.playerOnId)} on for ${getPlayerName(event.playerOffId)}`;
-      case "penalty":
-        return `Penalty ${event.isForTeam ? "for" : "against"}: ${event.penaltyOutcome}`;
-      default:
-        return "";
-    }
-  };
-
-  const handleDeleteEvent = useCallback((eventId: string) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    onDeleteEvent?.(eventId);
-  }, [onDeleteEvent]);
-
-  const renderRightActions = useCallback((eventId: string) => {
-    return (
-      <Pressable
-        style={sheetStyles.deleteEventAction}
-        onPress={() => handleDeleteEvent(eventId)}
-      >
-        <Feather name="trash-2" size={18} color="#FFFFFF" />
-      </Pressable>
-    );
-  }, [handleDeleteEvent]);
-
-  return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={sheetStyles.overlay} onPress={onClose}><View /></Pressable>
-      <View style={[sheetStyles.sheet, sheetStyles.timelineSheet, { paddingBottom: insets.bottom + Spacing.lg }]}>
-        <View style={sheetStyles.handle} />
-        <Pressable style={sheetStyles.closeButton} onPress={onClose}>
-          <Feather name="x" size={24} color={AppColors.textSecondary} />
-        </Pressable>
-        <ThemedText type="h4" style={sheetStyles.title}>Match Timeline</ThemedText>
-        <Pressable style={sheetStyles.filterToggle} onPress={() => setHideSubs(!hideSubs)}>
-          <Feather name={hideSubs ? "check-square" : "square"} size={18} color={AppColors.textSecondary} />
-          <ThemedText type="small" style={{ color: AppColors.textSecondary }}>Hide substitutions</ThemedText>
-        </Pressable>
-        {onDeleteEvent ? (
-          <ThemedText type="caption" style={{ color: AppColors.textSecondary, marginBottom: Spacing.sm }}>
-            Swipe left on an event to remove it
-          </ThemedText>
-        ) : null}
-        {filteredEvents.length === 0 ? (
-          <View style={sheetStyles.emptyTimeline}>
-            <Feather name="clock" size={32} color={AppColors.textSecondary} />
-            <ThemedText type="body" style={{ color: AppColors.textSecondary }}>No events yet</ThemedText>
-          </View>
-        ) : (
-          <FlatList
-            data={[...filteredEvents].reverse()}
-            keyExtractor={(item) => item.id}
-            renderItem={({ item }) => (
-              onDeleteEvent ? (
-                <Swipeable
-                  renderRightActions={() => renderRightActions(item.id)}
-                  overshootRight={false}
-                  friction={2}
-                >
-                  <View style={sheetStyles.timelineItem}>
-                    <ThemedText type="small" style={sheetStyles.timelineTime}>{formatMatchTime(item.timestamp)}</ThemedText>
-                    {getEventIcon(item)}
-                    <ThemedText type="small" style={sheetStyles.timelineText}>{getEventText(item)}</ThemedText>
-                  </View>
-                </Swipeable>
-              ) : (
-                <View style={sheetStyles.timelineItem}>
-                  <ThemedText type="small" style={sheetStyles.timelineTime}>{formatMatchTime(item.timestamp)}</ThemedText>
-                  {getEventIcon(item)}
-                  <ThemedText type="small" style={sheetStyles.timelineText}>{getEventText(item)}</ThemedText>
-                </View>
-              )
-            )}
-          />
-        )}
-      </View>
-    </Modal>
-  );
-}
-
 const styles = StyleSheet.create({
   container: { flex: 1 },
   loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
-  topBar: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: Spacing.lg, paddingBottom: Spacing.sm },
-  topBarLeft: { width: 40 },
-  topBarRight: { width: 40, alignItems: "flex-end" },
-  scoreSection: { flexDirection: "row", alignItems: "center", justifyContent: "center" },
-  scoreText: { color: "#FFFFFF", minWidth: 50, textAlign: "center" },
-  scoreDivider: { color: AppColors.textSecondary, marginHorizontal: Spacing.md },
-  clockSection: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: Spacing.md, marginBottom: Spacing.xs },
-  timeDisplay: { flexDirection: "row", alignItems: "baseline", gap: Spacing.xs },
-  clockText: { color: "#FFFFFF", fontVariant: ["tabular-nums"] },
-  addedTimeText: { color: AppColors.pitchGreen, fontWeight: "700" },
-  clockButton: { width: 40, height: 40, borderRadius: 20, backgroundColor: AppColors.pitchGreen, justifyContent: "center", alignItems: "center" },
-  halfTimeIndicator: { alignItems: "center", marginBottom: Spacing.xs },
+  
+  header: { paddingHorizontal: Spacing.lg, paddingBottom: Spacing.sm },
+  teamsHeader: { flexDirection: "row", alignItems: "center", justifyContent: "center", marginBottom: Spacing.sm },
+  teamName: { color: "#FFFFFF", fontWeight: "600", maxWidth: 120, textAlign: "center" },
+  vsText: { color: AppColors.textDisabled, marginHorizontal: Spacing.md, fontSize: 12 },
+  
+  scoreRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", marginBottom: Spacing.md },
+  scoreCircle: { width: 60, height: 60, borderRadius: 30, borderWidth: 2, borderColor: AppColors.textSecondary, justifyContent: "center", alignItems: "center" },
+  scoreNumber: { color: "#FFFFFF", fontWeight: "700" },
+  scoreDash: { color: AppColors.textSecondary, marginHorizontal: Spacing.lg },
+  
+  timerRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: Spacing.md },
+  playPauseButton: { width: 44, height: 44, borderRadius: 22, backgroundColor: AppColors.pitchGreen, justifyContent: "center", alignItems: "center" },
+  htButton: { paddingHorizontal: Spacing.lg, paddingVertical: Spacing.sm, borderRadius: BorderRadius.sm },
+  htButtonStyle: { backgroundColor: "#f57c00" },
+  endButtonStyle: { backgroundColor: AppColors.redCard },
+  htButtonText: { color: "#FFFFFF", fontWeight: "700" },
+  
+  halfTimeIndicator: { alignItems: "center", marginTop: Spacing.xs },
   halfTimeText: { color: AppColors.warningYellow, fontWeight: "700" },
-  periodIndicator: { alignItems: "center", marginBottom: Spacing.xs },
-  teamsRow: { flexDirection: "row", justifyContent: "center", alignItems: "center", gap: Spacing.md, marginBottom: Spacing.sm },
-  teamLabel: { color: AppColors.textSecondary, maxWidth: 120 },
-  vsLabel: { color: AppColors.textDisabled },
-  middleZone: { flex: 1, paddingHorizontal: Spacing.md },
+  periodIndicator: { alignItems: "center", marginTop: Spacing.xs },
+  
+  tabBar: { flexDirection: "row", marginHorizontal: Spacing.md, borderRadius: BorderRadius.sm, backgroundColor: AppColors.elevated, padding: 4, marginBottom: Spacing.sm },
+  tab: { flex: 1, paddingVertical: Spacing.sm, alignItems: "center", borderRadius: BorderRadius.xs },
+  tabActive: { backgroundColor: AppColors.surface },
+  tabText: { color: AppColors.textSecondary },
+  tabTextActive: { color: "#FFFFFF", fontWeight: "600" },
+  
+  tabContent: { flex: 1, marginHorizontal: Spacing.md },
+  
+  eventsContainer: { flex: 1, backgroundColor: AppColors.surface, borderRadius: BorderRadius.md, overflow: "hidden" },
+  emptyEvents: { flex: 1, justifyContent: "center", alignItems: "center", padding: Spacing.xl },
+  eventsList: { padding: Spacing.sm },
+  eventItem: { flexDirection: "row", alignItems: "center", paddingVertical: Spacing.md, paddingHorizontal: Spacing.sm, backgroundColor: AppColors.surface, borderBottomWidth: 1, borderBottomColor: AppColors.elevated },
+  eventTime: { color: AppColors.pitchGreen, fontWeight: "600", width: 60 },
+  eventIconWrapper: { width: 30, alignItems: "center" },
+  eventText: { flex: 1, color: AppColors.textSecondary },
+  deleteEventAction: { width: 60, backgroundColor: AppColors.redCard, justifyContent: "center", alignItems: "center" },
+  
+  formationContainer: { flex: 1 },
   pitchContainer: { flex: 1, justifyContent: "center" },
   pitch: { width: "100%", aspectRatio: 1.5, backgroundColor: "#1a472a", borderRadius: BorderRadius.md, borderWidth: 2, borderColor: "#2a6a3a", position: "relative", overflow: "hidden" },
   pitchCenterCircle: { position: "absolute", width: 60, height: 60, borderRadius: 30, borderWidth: 2, borderColor: "rgba(255,255,255,0.3)", left: "50%", top: "50%", marginLeft: -30, marginTop: -30 },
@@ -1583,9 +1540,9 @@ const styles = StyleSheet.create({
   pitchGoalAreaTop: { position: "absolute", width: 80, height: 30, borderWidth: 2, borderColor: "rgba(255,255,255,0.3)", borderTopWidth: 0, left: "50%", marginLeft: -40, top: 0 },
   pitchGoalAreaBottom: { position: "absolute", width: 80, height: 30, borderWidth: 2, borderColor: "rgba(255,255,255,0.3)", borderBottomWidth: 0, left: "50%", marginLeft: -40, bottom: 0 },
   playersGrid: { position: "absolute", width: "100%", height: "100%" },
-  playerCircle: { position: "absolute", width: 50, height: 50, borderRadius: 25, backgroundColor: AppColors.pitchGreen, justifyContent: "center", alignItems: "center", borderWidth: 2, borderColor: "#FFFFFF" },
   draggablePlayerCircle: { position: "absolute", width: 50, height: 50, borderRadius: 25, backgroundColor: AppColors.pitchGreen, justifyContent: "center", alignItems: "center", borderWidth: 2, borderColor: "#FFFFFF" },
   playerCircleText: { color: "#FFFFFF", fontWeight: "700", fontSize: 12 },
+  
   benchContainer: { paddingVertical: Spacing.sm },
   benchLabel: { color: AppColors.textSecondary, marginBottom: Spacing.xs },
   benchList: { gap: Spacing.sm },
@@ -1596,23 +1553,22 @@ const styles = StyleSheet.create({
   sentOffList: { gap: Spacing.sm },
   sentOffPlayer: { backgroundColor: AppColors.redCard, paddingVertical: Spacing.xs, paddingHorizontal: Spacing.md, borderRadius: BorderRadius.xs },
   sentOffPlayerText: { color: "#FFFFFF", fontWeight: "600" },
+  
   bottomBar: { paddingHorizontal: Spacing.md, paddingTop: Spacing.sm, gap: Spacing.sm },
   actionButtonsRow: { flexDirection: "row", gap: Spacing.sm },
-  actionButton: { flex: 1, height: Spacing.actionButtonHeight, borderRadius: BorderRadius.xs, justifyContent: "center", alignItems: "center" },
+  actionButton: { flex: 1, height: Spacing.actionButtonHeight, borderRadius: BorderRadius.sm, justifyContent: "center", alignItems: "center", flexDirection: "row" },
   actionButtonText: { color: "#FFFFFF", fontWeight: "700", fontSize: 14 },
   goalButton: { backgroundColor: AppColors.pitchGreen },
   goalAgainstButton: { backgroundColor: "#4a4a4a" },
   cardButton: { backgroundColor: AppColors.warningYellow },
+  penaltyForButton: { backgroundColor: "#6a4a8a" },
+  penaltyAgainstButton: { backgroundColor: "#5a3a6a" },
   subButton: { backgroundColor: "#3a5a8a" },
-  halfTimeButton: { backgroundColor: "#f57c00" },
-  penaltyButton: { backgroundColor: "#6a4a8a" },
-  endButton: { backgroundColor: AppColors.redCard },
 });
 
 const sheetStyles = StyleSheet.create({
   overlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)" },
   sheet: { backgroundColor: AppColors.surface, borderTopLeftRadius: BorderRadius.lg, borderTopRightRadius: BorderRadius.lg, paddingTop: Spacing.md, paddingHorizontal: Spacing.lg, maxHeight: SCREEN_HEIGHT * 0.7 },
-  timelineSheet: { maxHeight: SCREEN_HEIGHT * 0.5 },
   handle: { width: 40, height: 4, backgroundColor: AppColors.textDisabled, borderRadius: 2, alignSelf: "center", marginBottom: Spacing.md },
   closeButton: { position: "absolute", top: Spacing.md, right: Spacing.md, padding: Spacing.sm, zIndex: 10 },
   content: { paddingTop: Spacing.md },
@@ -1634,12 +1590,6 @@ const sheetStyles = StyleSheet.create({
   confirmButtonText: { color: "#FFFFFF" },
   penaltyOptions: { gap: Spacing.md },
   penaltyButton: { flexDirection: "row", alignItems: "center", gap: Spacing.md, backgroundColor: AppColors.elevated, padding: Spacing.lg, borderRadius: BorderRadius.sm },
-  emptyTimeline: { alignItems: "center", paddingVertical: Spacing["3xl"], gap: Spacing.md },
-  timelineItem: { flexDirection: "row", alignItems: "center", gap: Spacing.md, paddingVertical: Spacing.md, borderBottomWidth: 1, borderBottomColor: AppColors.elevated, backgroundColor: AppColors.surface },
-  deleteEventAction: { width: 60, height: "100%", backgroundColor: AppColors.redCard, justifyContent: "center", alignItems: "center" },
-  timelineTime: { color: AppColors.textSecondary, width: 50 },
-  timelineText: { flex: 1 },
-  filterToggle: { flexDirection: "row", alignItems: "center", gap: Spacing.sm, paddingVertical: Spacing.sm, marginBottom: Spacing.sm },
 });
 
 const confirmStyles = StyleSheet.create({
