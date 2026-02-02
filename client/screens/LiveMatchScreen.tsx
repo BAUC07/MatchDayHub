@@ -175,7 +175,7 @@ function DraggablePlayer({ player, position, pitchDimensions, onPositionChange, 
       runOnJS(onTap)();
     });
 
-  const composedGesture = Gesture.Race(panGesture, tapGesture);
+  const composedGesture = Gesture.Exclusive(panGesture, tapGesture);
 
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [
@@ -1559,7 +1559,7 @@ const styles = StyleSheet.create({
   halfTimeText: { color: AppColors.warningYellow, fontWeight: "700" },
   periodIndicator: { alignItems: "center", marginTop: Spacing.xs },
   
-  tabBar: { flexDirection: "row", marginHorizontal: Spacing.md, borderRadius: BorderRadius.sm, backgroundColor: AppColors.elevated, padding: 4, marginBottom: Spacing.sm },
+  tabBar: { flexDirection: "row", marginHorizontal: Spacing.md, borderRadius: BorderRadius.sm, backgroundColor: AppColors.elevated, padding: 4, marginBottom: Spacing.sm, zIndex: 10 },
   tab: { flex: 1, paddingVertical: Spacing.sm, alignItems: "center", borderRadius: BorderRadius.xs },
   tabActive: { backgroundColor: AppColors.surface },
   tabText: { color: AppColors.textSecondary },
