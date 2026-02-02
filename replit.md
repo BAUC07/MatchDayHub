@@ -77,9 +77,13 @@ MVP complete with core functionality:
      - Visual representation of on-pitch players
      - Bench section showing available substitutes
      - Sent Off section for red-carded players
-- Action buttons (6-button grid):
+- Action buttons (5-button grid):
   - Row 1: Goal+ (for us), Goal- (against us), Card
-  - Row 2: Penalty+ (for us), Penalty- (against us), Sub
+  - Row 2: Penalty (single button with 3-step flow), Sub
+- **Penalty 3-Step Flow**:
+  - Step 1: Select which team was awarded the penalty (shows actual team names)
+  - Step 2: Select outcome (scored, saved, or missed)
+  - Step 3: If home team scored, select which player scored the penalty
 - Smart timer with half-time logic:
   - Uses timestamp-based timing for reliability on iOS (survives app backgrounding)
   - Counts up to half-time (plannedDuration/2), then shows added time (e.g., "45+2:30")
