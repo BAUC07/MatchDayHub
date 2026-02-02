@@ -46,10 +46,7 @@ export default function MatchesScreen() {
   const [matchToDelete, setMatchToDelete] = useState<Match | null>(null);
   const [selectedTeamFilter, setSelectedTeamFilter] = useState<string | null>(null);
   const [showFilterPicker, setShowFilterPicker] = useState(false);
-  const [expandedNotesId, setExpandedNotesId] = useState<string | null>(null);
-  const [editingNotesText, setEditingNotesText] = useState("");
   const swipeableRefs = useRef<Map<string, Swipeable>>(new Map());
-  const notesTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const loadData = useCallback(async () => {
     try {
@@ -145,34 +142,6 @@ export default function MatchesScreen() {
         return AppColors.textSecondary;
     }
   };
-
-  const handleToggleNotes = useCallback((match: Match) => {
-    if (expandedNotesId === match.id) {
-      setExpandedNotesId(null);
-      setEditingNotesText("");
-    } else {
-      setExpandedNotesId(match.id);
-      setEditingNotesText(match.notes || "");
-    }
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-  }, [expandedNotesId]);
-
-  const handleNotesChange = useCallback((text: string, matchId: string) => {
-    setEditingNotesText(text);
-    
-    if (notesTimeoutRef.current) {
-      clearTimeout(notesTimeoutRef.current);
-    }
-    
-    notesTimeoutRef.current = setTimeout(async () => {
-      const matchToUpdate = matches.find(m => m.id === matchId);
-      if (matchToUpdate) {
-        const updatedMatch = { ...matchToUpdate, notes: text };
-        await saveMatch(updatedMatch);
-        setMatches(prev => prev.map(m => m.id === matchId ? updatedMatch : m));
-      }
-    }, 500);
-  }, [matches]);
 
   const handleDeletePress = useCallback((match: Match) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -363,43 +332,11 @@ export default function MatchesScreen() {
               ) : null}
             </View>
 
-            <Pressable 
-              style={styles.notesToggle} 
-              onPress={(e) => { e.stopPropagation(); handleToggleNotes(item); }}
-              hitSlop={8}
-            >
-              <Feather 
-                name={item.notes ? "file-text" : "edit-3"} 
-                size={16} 
-                color={item.notes ? AppColors.pitchGreen : AppColors.textSecondary} 
-              />
-            </Pressable>
           </Pressable>
-
-          {expandedNotesId === item.id ? (
-            <View style={styles.notesContainer}>
-              <TextInput
-                style={styles.notesInput}
-                value={editingNotesText}
-                onChangeText={(text) => handleNotesChange(text, item.id)}
-                placeholder="Add match notes..."
-                placeholderTextColor={AppColors.textSecondary}
-                multiline
-                textAlignVertical="top"
-              />
-              <ThemedText type="caption" style={styles.notesHint}>Notes are saved automatically</ThemedText>
-            </View>
-          ) : item.notes ? (
-            <Pressable style={styles.notesPreview} onPress={() => handleToggleNotes(item)}>
-              <ThemedText type="small" style={styles.notesPreviewText} numberOfLines={2}>
-                {item.notes}
-              </ThemedText>
-            </Pressable>
-          ) : null}
         </Swipeable>
       );
     },
-    [getTeamName, handleMatchPress, renderRightActions, expandedNotesId, editingNotesText, handleToggleNotes, handleNotesChange]
+    [getTeamName, handleMatchPress, renderRightActions]
   );
 
   const renderEmptyState = useCallback(
@@ -882,43 +819,5 @@ const styles = StyleSheet.create({
   },
   confirmDeleteButton: {
     backgroundColor: AppColors.redCard,
-  },
-  notesToggle: {
-    position: "absolute",
-    right: Spacing.md,
-    top: Spacing.md,
-    padding: Spacing.xs,
-  },
-  notesContainer: {
-    backgroundColor: AppColors.elevated,
-    padding: Spacing.md,
-    marginTop: 2,
-    borderBottomLeftRadius: BorderRadius.sm,
-    borderBottomRightRadius: BorderRadius.sm,
-  },
-  notesInput: {
-    backgroundColor: AppColors.surface,
-    borderRadius: BorderRadius.sm,
-    padding: Spacing.md,
-    color: AppColors.textPrimary,
-    fontSize: 14,
-    minHeight: 100,
-    textAlignVertical: "top",
-  },
-  notesHint: {
-    color: AppColors.textSecondary,
-    marginTop: Spacing.sm,
-    textAlign: "center",
-  },
-  notesPreview: {
-    backgroundColor: AppColors.elevated,
-    padding: Spacing.sm,
-    marginTop: 2,
-    borderBottomLeftRadius: BorderRadius.sm,
-    borderBottomRightRadius: BorderRadius.sm,
-  },
-  notesPreviewText: {
-    color: AppColors.textSecondary,
-    fontStyle: "italic",
   },
 });

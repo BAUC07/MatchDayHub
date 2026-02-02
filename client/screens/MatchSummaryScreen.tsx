@@ -611,6 +611,19 @@ export default function MatchSummaryScreen() {
             </ThemedText>
           </View>
         </Card>
+
+        {match.notes ? (
+          <>
+            <ThemedText type="h4" style={styles.sectionTitle}>
+              Match Notes
+            </ThemedText>
+            <Card elevation={2} style={styles.notesCard}>
+              <ThemedText type="body" style={styles.notesText}>
+                {match.notes}
+              </ThemedText>
+            </Card>
+          </>
+        ) : null}
       </ViewShot>
     </ScrollView>
   );
@@ -804,5 +817,13 @@ const styles = StyleSheet.create({
     marginBottom: -Spacing.lg,
     borderBottomLeftRadius: BorderRadius.lg,
     borderBottomRightRadius: BorderRadius.lg,
+  },
+  notesCard: {
+    padding: Spacing.lg,
+    marginBottom: Spacing.xl,
+  },
+  notesText: {
+    color: AppColors.textPrimary,
+    lineHeight: 22,
   },
 });
