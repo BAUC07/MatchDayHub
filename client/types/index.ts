@@ -68,6 +68,7 @@ export interface Match {
   kickoffTimestamp?: number; // epoch timestamp when kickoff button was pressed
   halfTimeMatchTime?: number; // match timer value (in seconds) when HT button was pressed
   endMatchTime?: number; // match timer value (in seconds) when END button was pressed
+  notes?: string; // manager notes for the match
 }
 
 export interface SubscriptionState {
