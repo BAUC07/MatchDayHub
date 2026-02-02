@@ -475,7 +475,7 @@ export default function StatsScreen() {
         if (event.type === "card" && event.playerId && event.isForTeam) {
           const current = cardMap.get(event.playerId) || { yellow: 0, red: 0, matchIds: new Set<string>() };
           if (event.cardType === "yellow") current.yellow++;
-          if (event.cardType === "red") current.red++;
+          if (event.cardType === "red" || event.cardType === "second_yellow") current.red++;
           current.matchIds.add(match.id);
           cardMap.set(event.playerId, current);
         }
@@ -556,8 +556,8 @@ export default function StatsScreen() {
               playerIntervals.set(event.playerOnId, []);
             }
           }
-        } else if (event.type === "card" && event.cardType === "red") {
-          // Red card - player is sent off, record their interval
+        } else if (event.type === "card" && (event.cardType === "red" || event.cardType === "second_yellow")) {
+          // Red card or second yellow - player is sent off, record their interval
           if (event.playerId && currentlyOnPitch.has(event.playerId)) {
             const startTime = currentlyOnPitch.get(event.playerId)!;
             const intervals = playerIntervals.get(event.playerId) || [];

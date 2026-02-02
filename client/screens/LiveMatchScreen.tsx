@@ -403,7 +403,7 @@ export default function LiveMatchScreen() {
     const sentOffIds = new Set<string>();
     
     match.events
-      .filter((e) => e.type === "card" && e.cardType === "red" && e.playerId)
+      .filter((e) => e.type === "card" && (e.cardType === "red" || e.cardType === "second_yellow") && e.playerId)
       .forEach((e) => {
         if (e.playerId) sentOffIds.add(e.playerId);
       });
@@ -550,25 +550,17 @@ export default function LiveMatchScreen() {
     
     const currentTime = getCurrentMatchTime();
     
-    const yellowEvent: MatchEvent = {
+    const secondYellowEvent: MatchEvent = {
       id: generateId(),
       type: "card",
       timestamp: currentTime,
       playerId: pendingSecondYellowPlayer.id,
-      cardType: "yellow",
-    };
-    
-    const redEvent: MatchEvent = {
-      id: generateId(),
-      type: "card",
-      timestamp: currentTime,
-      playerId: pendingSecondYellowPlayer.id,
-      cardType: "red",
+      cardType: "second_yellow",
     };
     
     const updatedMatch = {
       ...match,
-      events: [...match.events, yellowEvent, redEvent],
+      events: [...match.events, secondYellowEvent],
       totalMatchTime: currentTime,
     };
     
@@ -841,6 +833,14 @@ export default function LiveMatchScreen() {
       case "goal_against":
         return <Feather name="target" size={16} color={AppColors.redCard} />;
       case "card":
+        if (event.cardType === "second_yellow") {
+          return (
+            <View style={{ width: 12, height: 16, borderRadius: 2, overflow: "hidden" }}>
+              <View style={{ position: "absolute", width: 0, height: 0, borderStyle: "solid", borderRightWidth: 12, borderBottomWidth: 16, borderRightColor: "transparent", borderBottomColor: AppColors.warningYellow }} />
+              <View style={{ position: "absolute", width: 0, height: 0, borderStyle: "solid", borderLeftWidth: 12, borderTopWidth: 16, borderLeftColor: "transparent", borderTopColor: AppColors.redCard }} />
+            </View>
+          );
+        }
         return (
           <View style={{ width: 12, height: 16, backgroundColor: event.cardType === "yellow" ? AppColors.warningYellow : AppColors.redCard, borderRadius: 2 }} />
         );
@@ -862,6 +862,9 @@ export default function LiveMatchScreen() {
       case "goal_against":
         return `Goal conceded (${formatGoalType(event.goalType)})`;
       case "card":
+        if (event.cardType === "second_yellow") {
+          return `Second yellow (red): ${getPlayerName(event.playerId)}`;
+        }
         return `${event.cardType === "yellow" ? "Yellow" : "Red"} card: ${getPlayerName(event.playerId)}`;
       case "substitution":
         return `Sub: ${getPlayerName(event.playerOnId)} on for ${getPlayerName(event.playerOffId)}`;

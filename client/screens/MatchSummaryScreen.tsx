@@ -208,8 +208,8 @@ export default function MatchSummaryScreen() {
             playerOn.isOnPitch = true;
           }
         }
-      } else if (event.type === "card" && event.cardType === "red" && event.playerId) {
-        // Red card - player is sent off, stop accruing minutes
+      } else if (event.type === "card" && (event.cardType === "red" || event.cardType === "second_yellow") && event.playerId) {
+        // Red card or second yellow - player is sent off, stop accruing minutes
         const player = stats.get(event.playerId);
         if (player && player.isOnPitch) {
           player.timeOnPitch += event.timestamp - player.lastOnTime;
@@ -462,20 +462,28 @@ export default function MatchSummaryScreen() {
                       </>
                     ) : event.type === "card" ? (
                       <>
-                        <View
-                          style={[
-                            styles.eventCardIcon,
-                            {
-                              backgroundColor:
-                                event.cardType === "yellow"
-                                  ? AppColors.warningYellow
-                                  : AppColors.redCard,
-                            },
-                          ]}
-                        />
+                        {event.cardType === "second_yellow" ? (
+                          <View style={[styles.eventCardIcon, { overflow: "hidden" }]}>
+                            <View style={{ position: "absolute", width: 0, height: 0, borderStyle: "solid", borderRightWidth: 12, borderBottomWidth: 16, borderRightColor: "transparent", borderBottomColor: AppColors.warningYellow }} />
+                            <View style={{ position: "absolute", width: 0, height: 0, borderStyle: "solid", borderLeftWidth: 12, borderTopWidth: 16, borderLeftColor: "transparent", borderTopColor: AppColors.redCard }} />
+                          </View>
+                        ) : (
+                          <View
+                            style={[
+                              styles.eventCardIcon,
+                              {
+                                backgroundColor:
+                                  event.cardType === "yellow"
+                                    ? AppColors.warningYellow
+                                    : AppColors.redCard,
+                              },
+                            ]}
+                          />
+                        )}
                         <ThemedText type="small" style={styles.eventDescription}>
-                          {event.cardType === "yellow" ? "Yellow" : "Red"} card:{" "}
-                          {getPlayerName(event.playerId)}
+                          {event.cardType === "second_yellow" 
+                            ? `Second yellow (red): ${getPlayerName(event.playerId)}`
+                            : `${event.cardType === "yellow" ? "Yellow" : "Red"} card: ${getPlayerName(event.playerId)}`}
                         </ThemedText>
                       </>
                     ) : event.type === "substitution" ? (

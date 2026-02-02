@@ -25,7 +25,7 @@ export type MatchFormat = "5v5" | "7v7" | "9v9" | "11v11";
 export type MatchLocation = "home" | "away";
 
 export type GoalType = "open_play" | "corner" | "free_kick" | "penalty";
-export type CardType = "yellow" | "red";
+export type CardType = "yellow" | "red" | "second_yellow";
 export type PenaltyOutcome = "scored" | "saved" | "missed";
 
 export interface MatchEvent {
