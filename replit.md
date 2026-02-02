@@ -62,23 +62,31 @@ MVP complete with core functionality:
 - **Add Player Modal**: Button triggers a modal popup for cleaner UI (name + optional squad number)
 - Unavailable players excluded from match data and don't record stats
 
-### Live Match (Critical - No Scroll)
-- Three-zone fixed layout:
-  1. Top: Score + clock + period indicator + timeline access
-  2. Middle: Pitch diagram with players + bench
-  3. Bottom: Action buttons (GOAL+, GOAL-, CARD, SUB, PENALTY, HT/END)
+### Live Match (Tabbed Interface)
+- Header section:
+  - Team names: "Your Team VS Opposition"
+  - Score circles showing current score
+  - Timer with play/pause button + HT/END button
+  - Period indicator (1st Half, HALF TIME, 2nd Half)
+- Tabbed content area with two tabs:
+  1. **Match Events Tab**: Scrollable timeline with real clock timestamps (HH:MM format)
+     - Events show icon + description (scorer, assist, goal type)
+     - Swipe-to-delete events (recalculates score automatically)
+     - Empty state when no events logged
+  2. **Team Formation Tab**: Pitch diagram with draggable players
+     - Visual representation of on-pitch players
+     - Bench section showing available substitutes
+     - Sent Off section for red-carded players
+- Action buttons (6-button grid):
+  - Row 1: Goal+ (for us), Goal- (against us), Card
+  - Row 2: Penalty+ (for us), Penalty- (against us), Sub
 - Smart timer with half-time logic:
   - Uses timestamp-based timing for reliability on iOS (survives app backgrounding)
   - Counts up to half-time (plannedDuration/2), then shows added time (e.g., "45+2:30")
-  - HT button triggers half-time break, resumes for second half
-  - Button dynamically changes from "HT" to "END" in second half
-  - Period indicator shows "1st Half", "HALF TIME", or "2nd Half"
+  - HT button triggers half-time break, becomes "2nd" then "END" in second half
   - Timer state persisted with timestamps to restore accurate time after app restart
 - All events logged with timestamp
-- Undo last event supported
-- Pause/resume clock (long-press to pause)
-- Timeline filter to hide substitution events
-- Swipe-to-delete events in timeline (recalculates score automatically)
+- Pause/resume clock (long-press play button to pause)
 
 ### Stats Tab
 - Team selector when multiple teams exist
@@ -172,6 +180,13 @@ server/
 - Haptic feedback on all interactions
 
 ## Recent Changes
+- Redesigned Live Match screen with tabbed interface:
+  - New header layout: Team names, score circles, timer with play/pause, HT/END button
+  - Two tabs to quickly flip between views: "Match Events" and "Team Formation"
+  - Match Events tab: Scrollable timeline with real clock timestamps (HH:MM format)
+  - Team Formation tab: Pitch diagram with draggable players, bench, and sent-off section
+  - Action buttons reorganized into 6-button grid: Goal+, Goal-, Card, Penalty+, Penalty-, Sub
+  - Icons added to action buttons for visual clarity (+ and - for goals/penalties)
 - Fixed player minutes calculation for substitutions and red cards:
   - Substituted players: Minutes stop accruing when subbed off, start accruing when subbed on
   - Red-carded players: Minutes stop accruing when sent off
