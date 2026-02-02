@@ -56,9 +56,10 @@ interface DraggablePlayerProps {
   onTap: (playerId: string) => void;
   onLongPress: (playerId: string) => void;
   columnLayouts: React.MutableRefObject<ColumnLayouts>;
+  unavailableRef: React.RefObject<View | null>;
 }
 
-function DraggablePlayer({ player, status, onDrop, onTap, onLongPress, columnLayouts }: DraggablePlayerProps) {
+function DraggablePlayer({ player, status, onDrop, onTap, onLongPress, columnLayouts, unavailableRef }: DraggablePlayerProps) {
   const translateX = useSharedValue(0);
   const translateY = useSharedValue(0);
   const scale = useSharedValue(1);
@@ -69,22 +70,33 @@ function DraggablePlayer({ player, status, onDrop, onTap, onLongPress, columnLay
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
   };
 
-  const handleDrop = (playerId: string, x: number, y: number, absoluteY: number) => {
+  const handleDrop = (playerId: string, absoluteX: number, absoluteY: number) => {
     const startingLayout = columnLayouts.current.starting;
     const benchLayout = columnLayouts.current.bench;
-    const unavailableLayout = columnLayouts.current.unavailable;
     
-    // Check if dropped in unavailable section (below lineup area)
-    if (unavailableLayout && 
-        absoluteY >= unavailableLayout.y && 
-        absoluteY <= unavailableLayout.y + unavailableLayout.height) {
-      onDrop(playerId, "unavailable");
-    } else if (startingLayout && x < startingLayout.width + 20) {
-      // Dropped in starting lineup column (left side)
-      onDrop(playerId, "starting");
-    } else if (benchLayout) {
-      // Dropped in bench column (right side)
-      onDrop(playerId, "bench");
+    // Measure the unavailable section's absolute position
+    if (unavailableRef.current) {
+      unavailableRef.current.measureInWindow((ux, uy, uwidth, uheight) => {
+        // Check if dropped in unavailable section using absolute screen coordinates
+        if (uy !== undefined && uheight !== undefined &&
+            absoluteY >= uy && 
+            absoluteY <= uy + uheight) {
+          onDrop(playerId, "unavailable");
+        } else if (startingLayout && absoluteX < startingLayout.width + 20) {
+          // Dropped in starting lineup column (left side)
+          onDrop(playerId, "starting");
+        } else if (benchLayout) {
+          // Dropped in bench column (right side)
+          onDrop(playerId, "bench");
+        }
+      });
+    } else {
+      // Fallback if ref not available
+      if (startingLayout && absoluteX < startingLayout.width + 20) {
+        onDrop(playerId, "starting");
+      } else if (benchLayout) {
+        onDrop(playerId, "bench");
+      }
     }
   };
 
@@ -104,7 +116,7 @@ function DraggablePlayer({ player, status, onDrop, onTap, onLongPress, columnLay
       scale.value = withSpring(1);
       zIndex.value = 0;
       
-      runOnJS(handleDrop)(player.id, event.absoluteX, event.translationY, event.absoluteY);
+      runOnJS(handleDrop)(player.id, event.absoluteX, event.absoluteY);
       
       translateX.value = withSpring(0);
       translateY.value = withSpring(0);
@@ -197,6 +209,7 @@ export default function MatchSetupScreen() {
     bench: null,
     unavailable: null,
   });
+  const unavailableSectionRef = useRef<View>(null);
 
   const getDefaultDuration = (f: MatchFormat) => {
     switch (f) {
@@ -371,7 +384,7 @@ export default function MatchSetupScreen() {
           next = "unavailable";
         }
       } else if (current === "starting") {
-        next = "bench";
+        next = "unavailable";
       } else {
         next = "bench";
       }
@@ -620,6 +633,7 @@ export default function MatchSetupScreen() {
                   onTap={handleTap}
                   onLongPress={handleLongPress}
                   columnLayouts={columnLayouts}
+                  unavailableRef={unavailableSectionRef}
                 />
               ))}
               {startingPlayers.length === 0 ? (
@@ -658,6 +672,7 @@ export default function MatchSetupScreen() {
                   onTap={handleTap}
                   onLongPress={handleLongPress}
                   columnLayouts={columnLayouts}
+                  unavailableRef={unavailableSectionRef}
                 />
               ))}
             </View>
@@ -667,6 +682,7 @@ export default function MatchSetupScreen() {
       ) : null}
 
       <View
+        ref={unavailableSectionRef}
         style={styles.unavailableSection}
         onLayout={(e) => {
           columnLayouts.current.unavailable = e.nativeEvent.layout;
@@ -692,6 +708,7 @@ export default function MatchSetupScreen() {
                 onTap={handleTap}
                 onLongPress={handleLongPress}
                 columnLayouts={columnLayouts}
+                unavailableRef={unavailableSectionRef}
               />
             ))}
           </View>
