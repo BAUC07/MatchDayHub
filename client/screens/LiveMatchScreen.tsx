@@ -573,7 +573,7 @@ export default function LiveMatchScreen() {
   );
 
   const handlePenalty = useCallback(
-    async (isFor: boolean, outcome?: "scored" | "saved", scorerId?: string) => {
+    async (isFor: boolean, outcome?: "scored" | "saved" | "missed", scorerId?: string) => {
       await addEvent({
         type: "penalty",
         isForTeam: isFor,
@@ -802,7 +802,8 @@ export default function LiveMatchScreen() {
       case "substitution":
         return `Sub: ${getPlayerName(event.playerOnId)} on for ${getPlayerName(event.playerOffId)}`;
       case "penalty":
-        return `Penalty ${event.isForTeam ? "for" : "against"}: ${event.penaltyOutcome}`;
+        const penaltyTeamName = event.isForTeam ? team?.name || "Us" : match?.opposition || "Them";
+        return `Penalty ${penaltyTeamName}: ${event.penaltyOutcome}${event.playerId && event.penaltyOutcome === "scored" && event.isForTeam ? ` (${getPlayerName(event.playerId)})` : ""}`;
       default:
         return "";
     }
@@ -1100,26 +1101,12 @@ export default function LiveMatchScreen() {
           <Pressable
             style={({ pressed }) => [
               styles.actionButton,
-              styles.penaltyForButton,
+              styles.penaltyButton,
               { opacity: pressed ? 0.9 : 1 },
             ]}
             onPress={() => openActionSheet("penalty")}
           >
-            <Feather name="plus" size={16} color="#FFFFFF" style={{ marginRight: 4 }} />
-            <ThemedText type="body" style={styles.actionButtonText}>
-              Penalty
-            </ThemedText>
-          </Pressable>
-
-          <Pressable
-            style={({ pressed }) => [
-              styles.actionButton,
-              styles.penaltyAgainstButton,
-              { opacity: pressed ? 0.9 : 1 },
-            ]}
-            onPress={() => openActionSheet("penalty")}
-          >
-            <Feather name="minus" size={16} color="#FFFFFF" style={{ marginRight: 4 }} />
+            <Feather name="circle" size={16} color="#FFFFFF" style={{ marginRight: 4 }} />
             <ThemedText type="body" style={styles.actionButtonText}>
               Penalty
             </ThemedText>
@@ -1147,6 +1134,8 @@ export default function LiveMatchScreen() {
         players={playersOnPitch}
         substitutes={substitutes}
         selectedPlayer={selectedPlayer}
+        homeTeamName={team.name}
+        awayTeamName={match.opposition}
         onClose={() => setShowActionSheet(false)}
         onGoalFor={handleGoalFor}
         onGoalAgainst={handleGoalAgainst}
@@ -1208,12 +1197,14 @@ interface ActionSheetProps {
   players: Player[];
   substitutes: Player[];
   selectedPlayer: Player | null;
+  homeTeamName: string;
+  awayTeamName: string;
   onClose: () => void;
   onGoalFor: (scorer: Player, goalType: GoalType, assist?: Player) => void;
   onGoalAgainst: (goalType: GoalType) => void;
   onCard: (player: Player, cardType: CardType) => void;
   onSubstitution: (playerOff: Player, playerOn: Player) => void;
-  onPenalty: (isFor: boolean, outcome?: "scored" | "saved", scorerId?: string) => void;
+  onPenalty: (isFor: boolean, outcome?: "scored" | "saved" | "missed", scorerId?: string) => void;
 }
 
 function ActionSheet({
@@ -1222,6 +1213,8 @@ function ActionSheet({
   players,
   substitutes,
   selectedPlayer,
+  homeTeamName,
+  awayTeamName,
   onClose,
   onGoalFor,
   onGoalAgainst,
@@ -1236,6 +1229,7 @@ function ActionSheet({
   const [goalType, setGoalType] = useState<GoalType>("open_play");
   const [cardType, setCardType] = useState<CardType>("yellow");
   const [playerOff, setPlayerOff] = useState<Player | null>(null);
+  const [penaltyForHome, setPenaltyForHome] = useState<boolean | null>(null);
 
   useEffect(() => {
     if (visible) {
@@ -1245,6 +1239,7 @@ function ActionSheet({
       setGoalType("open_play");
       setCardType("yellow");
       setPlayerOff(null);
+      setPenaltyForHome(null);
     }
   }, [visible, selectedPlayer]);
 
@@ -1436,22 +1431,65 @@ function ActionSheet({
         return (
           <View style={sheetStyles.content}>
             <ThemedText type="h4" style={sheetStyles.title}>Penalty</ThemedText>
+            <ThemedText type="body" style={{ textAlign: "center", color: AppColors.textSecondary, marginBottom: Spacing.lg }}>
+              Which team was awarded the penalty?
+            </ThemedText>
             <View style={sheetStyles.penaltyOptions}>
-              <Pressable style={sheetStyles.penaltyButton} onPress={() => setStep(1)}>
-                <Feather name="check-circle" size={24} color={AppColors.pitchGreen} />
-                <ThemedText type="body">For Us - Scored</ThemedText>
+              <Pressable 
+                style={sheetStyles.penaltyTeamButton} 
+                onPress={() => { Haptics.selectionAsync(); setPenaltyForHome(true); setStep(1); }}
+              >
+                <Feather name="shield" size={24} color={AppColors.pitchGreen} />
+                <ThemedText type="body" style={sheetStyles.penaltyTeamText}>Penalty {homeTeamName}</ThemedText>
               </Pressable>
-              <Pressable style={sheetStyles.penaltyButton} onPress={() => onPenalty(true, "saved")}>
-                <Feather name="x-circle" size={24} color={AppColors.redCard} />
-                <ThemedText type="body">For Us - Saved</ThemedText>
+              <Pressable 
+                style={sheetStyles.penaltyTeamButton} 
+                onPress={() => { Haptics.selectionAsync(); setPenaltyForHome(false); setStep(1); }}
+              >
+                <Feather name="shield" size={24} color={AppColors.redCard} />
+                <ThemedText type="body" style={sheetStyles.penaltyTeamText}>Penalty {awayTeamName}</ThemedText>
               </Pressable>
-              <Pressable style={sheetStyles.penaltyButton} onPress={() => onPenalty(false, "scored")}>
-                <Feather name="check-circle" size={24} color={AppColors.redCard} />
-                <ThemedText type="body">Against Us - Scored</ThemedText>
+            </View>
+          </View>
+        );
+      } else if (step === 1) {
+        const teamName = penaltyForHome ? homeTeamName : awayTeamName;
+        const scoredColor = penaltyForHome ? AppColors.pitchGreen : AppColors.redCard;
+        const savedColor = penaltyForHome ? AppColors.redCard : AppColors.pitchGreen;
+        return (
+          <View style={sheetStyles.content}>
+            <ThemedText type="h4" style={sheetStyles.title}>Penalty {teamName}</ThemedText>
+            <ThemedText type="body" style={{ textAlign: "center", color: AppColors.textSecondary, marginBottom: Spacing.lg }}>
+              What was the outcome?
+            </ThemedText>
+            <View style={sheetStyles.penaltyOptions}>
+              <Pressable 
+                style={sheetStyles.penaltyButton} 
+                onPress={() => { 
+                  Haptics.selectionAsync(); 
+                  if (penaltyForHome) {
+                    setStep(2);
+                  } else {
+                    onPenalty(false, "scored");
+                  }
+                }}
+              >
+                <Feather name="check-circle" size={24} color={scoredColor} />
+                <ThemedText type="body">Penalty {teamName} scored</ThemedText>
               </Pressable>
-              <Pressable style={sheetStyles.penaltyButton} onPress={() => onPenalty(false, "saved")}>
-                <Feather name="x-circle" size={24} color={AppColors.pitchGreen} />
-                <ThemedText type="body">Against Us - Saved</ThemedText>
+              <Pressable 
+                style={sheetStyles.penaltyButton} 
+                onPress={() => { Haptics.selectionAsync(); onPenalty(penaltyForHome || false, "saved"); }}
+              >
+                <Feather name="x-circle" size={24} color={savedColor} />
+                <ThemedText type="body">Penalty {teamName} saved</ThemedText>
+              </Pressable>
+              <Pressable 
+                style={sheetStyles.penaltyButton} 
+                onPress={() => { Haptics.selectionAsync(); onPenalty(penaltyForHome || false, "missed"); }}
+              >
+                <Feather name="slash" size={24} color={AppColors.textSecondary} />
+                <ThemedText type="body">Penalty {teamName} missed</ThemedText>
               </Pressable>
             </View>
           </View>
@@ -1561,8 +1599,7 @@ const styles = StyleSheet.create({
   goalButton: { backgroundColor: AppColors.pitchGreen },
   goalAgainstButton: { backgroundColor: "#4a4a4a" },
   cardButton: { backgroundColor: AppColors.warningYellow },
-  penaltyForButton: { backgroundColor: "#6a4a8a" },
-  penaltyAgainstButton: { backgroundColor: "#5a3a6a" },
+  penaltyButton: { backgroundColor: "#6a4a8a" },
   subButton: { backgroundColor: "#3a5a8a" },
 });
 
@@ -1590,6 +1627,8 @@ const sheetStyles = StyleSheet.create({
   confirmButtonText: { color: "#FFFFFF" },
   penaltyOptions: { gap: Spacing.md },
   penaltyButton: { flexDirection: "row", alignItems: "center", gap: Spacing.md, backgroundColor: AppColors.elevated, padding: Spacing.lg, borderRadius: BorderRadius.sm },
+  penaltyTeamButton: { flexDirection: "row", alignItems: "center", gap: Spacing.md, backgroundColor: AppColors.elevated, padding: Spacing.xl, borderRadius: BorderRadius.md },
+  penaltyTeamText: { fontSize: 16, fontWeight: "600" },
 });
 
 const confirmStyles = StyleSheet.create({
