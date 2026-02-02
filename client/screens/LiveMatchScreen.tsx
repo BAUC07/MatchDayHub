@@ -136,9 +136,11 @@ interface DraggablePlayerProps {
   pitchDimensions: { width: number; height: number };
   onPositionChange: (playerId: string, x: number, y: number) => void;
   onTap: () => void;
+  disabled?: boolean;
+  compact?: boolean;
 }
 
-function DraggablePlayer({ player, position, pitchDimensions, onPositionChange, onTap }: DraggablePlayerProps) {
+function DraggablePlayer({ player, position, pitchDimensions, onPositionChange, onTap, disabled = false, compact = false }: DraggablePlayerProps) {
   const translateX = useSharedValue(position.x);
   const translateY = useSharedValue(position.y);
   const scale = useSharedValue(1);
@@ -151,6 +153,7 @@ function DraggablePlayer({ player, position, pitchDimensions, onPositionChange, 
   }, [position.x, position.y]);
 
   const panGesture = Gesture.Pan()
+    .enabled(!disabled)
     .onStart(() => {
       startX.value = translateX.value;
       startY.value = translateY.value;
@@ -160,7 +163,7 @@ function DraggablePlayer({ player, position, pitchDimensions, onPositionChange, 
     .onUpdate((event) => {
       const newX = startX.value + event.translationX;
       const newY = startY.value + event.translationY;
-      const playerSize = 50;
+      const playerSize = compact ? 28 : 50;
       translateX.value = Math.max(0, Math.min(pitchDimensions.width - playerSize, newX));
       translateY.value = Math.max(0, Math.min(pitchDimensions.height - playerSize, newY));
     })
@@ -170,6 +173,7 @@ function DraggablePlayer({ player, position, pitchDimensions, onPositionChange, 
     });
 
   const tapGesture = Gesture.Tap()
+    .enabled(!disabled)
     .onEnd(() => {
       runOnJS(Haptics.selectionAsync)();
       runOnJS(onTap)();
@@ -185,10 +189,23 @@ function DraggablePlayer({ player, position, pitchDimensions, onPositionChange, 
     ],
   }));
 
+  const playerCircleStyle = compact ? styles.compactPlayerCircle : styles.draggablePlayerCircle;
+  const playerTextStyle = compact ? styles.compactPlayerText : styles.playerCircleText;
+
+  if (disabled) {
+    return (
+      <Animated.View style={[playerCircleStyle, animatedStyle]}>
+        <ThemedText type="small" style={playerTextStyle}>
+          {getPlayerDisplayName(player)}
+        </ThemedText>
+      </Animated.View>
+    );
+  }
+
   return (
     <GestureDetector gesture={composedGesture}>
-      <Animated.View style={[styles.draggablePlayerCircle, animatedStyle]}>
-        <ThemedText type="small" style={styles.playerCircleText}>
+      <Animated.View style={[playerCircleStyle, animatedStyle]}>
+        <ThemedText type="small" style={playerTextStyle}>
           {getPlayerDisplayName(player)}
         </ThemedText>
       </Animated.View>
@@ -222,6 +239,8 @@ export default function LiveMatchScreen() {
   const [secondHalfAddedTime, setSecondHalfAddedTime] = useState(0);
   const [playerPositions, setPlayerPositions] = useState<PlayerPosition[]>([]);
   const [pitchDimensions, setPitchDimensions] = useState({ width: 0, height: 0 });
+  const [compactPitchDimensions, setCompactPitchDimensions] = useState({ width: 0, height: 0 });
+  const [isFormationExpanded, setIsFormationExpanded] = useState(false);
 
   const lastSaveRef = useRef<number>(0);
 
@@ -712,41 +731,80 @@ export default function LiveMatchScreen() {
   const substitutes = useMemo(() => getSubstitutes(), [getSubstitutes]);
   const sentOffPlayers = useMemo(() => getSentOffPlayers(), [getSentOffPlayers]);
 
-  const getDefaultPosition = useCallback((index: number, totalPlayers: number): { x: number; y: number } => {
-    const cols = 4;
-    const col = index % cols;
-    const row = Math.floor(index / cols);
-    return {
-      x: 0.15 + col * 0.23,
-      y: 0.15 + row * 0.28,
+  const getFormationPositions = useCallback((format: string, playerCount: number): { x: number; y: number }[] => {
+    const formations: Record<string, number[]> = {
+      "5v5": [1, 2, 2],
+      "7v7": [1, 2, 3, 1],
+      "9v9": [1, 3, 3, 2],
+      "11v11": [1, 4, 4, 2],
     };
+    
+    const formation = formations[format] || formations["11v11"];
+    const positions: { x: number; y: number }[] = [];
+    
+    let playerIndex = 0;
+    const totalRows = formation.length;
+    
+    for (let rowIdx = 0; rowIdx < totalRows && playerIndex < playerCount; rowIdx++) {
+      const playersInRow = formation[rowIdx];
+      const yPos = 0.85 - (rowIdx / (totalRows - 1 || 1)) * 0.7;
+      
+      for (let colIdx = 0; colIdx < playersInRow && playerIndex < playerCount; colIdx++) {
+        const xPos = playersInRow === 1 
+          ? 0.5 
+          : 0.15 + (colIdx / (playersInRow - 1)) * 0.7;
+        
+        positions.push({ x: xPos, y: yPos });
+        playerIndex++;
+      }
+    }
+    
+    while (playerIndex < playerCount) {
+      const row = Math.floor((playerIndex - positions.length) / 4);
+      const col = (playerIndex - positions.length) % 4;
+      positions.push({
+        x: 0.15 + col * 0.23,
+        y: 0.15 + row * 0.28,
+      });
+      playerIndex++;
+    }
+    
+    return positions;
   }, []);
 
   useEffect(() => {
-    if (playersOnPitch.length > 0 && pitchDimensions.width > 0) {
+    if (playersOnPitch.length > 0 && pitchDimensions.width > 0 && match) {
       setPlayerPositions((prev) => {
+        if (prev.length === 0) {
+          const formationPositions = getFormationPositions(match.format, playersOnPitch.length);
+          return playersOnPitch.map((player, idx) => ({
+            playerId: player.id,
+            x: (formationPositions[idx]?.x || 0.5) * pitchDimensions.width - 25,
+            y: (formationPositions[idx]?.y || 0.5) * pitchDimensions.height - 25,
+          }));
+        }
+        
         const existingIds = new Set(prev.map(p => p.playerId));
         const currentIds = new Set(playersOnPitch.map(p => p.id));
         
         const filtered = prev.filter(p => currentIds.has(p.playerId));
         
-        const newPositions = playersOnPitch
-          .filter(p => !existingIds.has(p.id))
-          .map((player, idx) => {
-            const totalNew = playersOnPitch.filter(p => !existingIds.has(p.id)).length;
-            const existingCount = filtered.length;
-            const pos = getDefaultPosition(existingCount + idx, playersOnPitch.length);
-            return {
-              playerId: player.id,
-              x: pos.x * pitchDimensions.width,
-              y: pos.y * pitchDimensions.height,
-            };
-          });
+        const newPlayers = playersOnPitch.filter(p => !existingIds.has(p.id));
+        const formationPositions = getFormationPositions(match.format, playersOnPitch.length);
+        
+        const newPositions = newPlayers.map((player, idx) => {
+          const posIdx = filtered.length + idx;
+          return {
+            playerId: player.id,
+            x: (formationPositions[posIdx]?.x || 0.5) * pitchDimensions.width - 25,
+            y: (formationPositions[posIdx]?.y || 0.5) * pitchDimensions.height - 25,
+          };
+        });
         
         return [...filtered, ...newPositions];
       });
     }
-  }, [playersOnPitch, pitchDimensions, getDefaultPosition]);
+  }, [playersOnPitch, pitchDimensions, match, getFormationPositions]);
 
   const updatePlayerPosition = useCallback((playerId: string, x: number, y: number) => {
     setPlayerPositions((prev) => 
@@ -975,36 +1033,91 @@ export default function LiveMatchScreen() {
             )}
           </View>
         ) : (
-          <View style={styles.formationContainer}>
-            <View style={styles.pitchContainer}>
-              <View style={styles.pitch} onLayout={handlePitchLayout}>
-                <View style={styles.pitchCenterCircle} />
-                <View style={styles.pitchCenterLine} />
-                <View style={styles.pitchGoalAreaTop} />
-                <View style={styles.pitchGoalAreaBottom} />
+          <ScrollView style={styles.formationContainer} contentContainerStyle={styles.formationContent}>
+            <Pressable
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                setIsFormationExpanded(!isFormationExpanded);
+              }}
+            >
+              {isFormationExpanded ? (
+                <View style={styles.expandedPitchContainer}>
+                  <View style={styles.expandedPitch} onLayout={handlePitchLayout}>
+                    <View style={styles.pitchPenaltyAreaTop} />
+                    <View style={styles.pitchGoalBoxTop} />
+                    <View style={styles.pitchCenterCircle} />
+                    <View style={styles.pitchCenterLine} />
+                    <View style={styles.pitchPenaltyAreaBottom} />
+                    <View style={styles.pitchGoalBoxBottom} />
 
-                <View style={styles.playersGrid}>
-                  {playersOnPitch.map((player) => {
-                    const pos = playerPositions.find(p => p.playerId === player.id);
-                    if (!pos) return null;
-                    return (
-                      <DraggablePlayer
-                        key={player.id}
-                        player={player}
-                        position={{ x: pos.x, y: pos.y }}
-                        pitchDimensions={pitchDimensions}
-                        onPositionChange={updatePlayerPosition}
-                        onTap={() => {
-                          setSelectedPlayer(player);
-                          setCurrentAction("goal_for");
-                          setShowActionSheet(true);
-                        }}
-                      />
-                    );
-                  })}
+                    <View style={styles.playersGrid}>
+                      {playersOnPitch.map((player) => {
+                        const pos = playerPositions.find(p => p.playerId === player.id);
+                        if (!pos) return null;
+                        return (
+                          <DraggablePlayer
+                            key={player.id}
+                            player={player}
+                            position={{ x: pos.x, y: pos.y }}
+                            pitchDimensions={pitchDimensions}
+                            onPositionChange={updatePlayerPosition}
+                            onTap={() => {
+                              setSelectedPlayer(player);
+                              setCurrentAction("goal_for");
+                              setShowActionSheet(true);
+                            }}
+                          />
+                        );
+                      })}
+                    </View>
+                  </View>
+                  <ThemedText type="caption" style={styles.tapHint}>
+                    Tap to collapse - Drag players to reposition
+                  </ThemedText>
                 </View>
-              </View>
-            </View>
+              ) : (
+                <View style={styles.compactPitchContainer}>
+                  <View 
+                    style={styles.compactPitch} 
+                    onLayout={(e) => {
+                      const { width, height } = e.nativeEvent.layout;
+                      setCompactPitchDimensions({ width, height });
+                    }}
+                  >
+                    <View style={styles.compactCenterCircle} />
+                    <View style={styles.compactCenterLine} />
+                    <View style={styles.compactGoalAreaLeft} />
+                    <View style={styles.compactGoalAreaRight} />
+
+                    <View style={styles.playersGrid}>
+                      {playersOnPitch.map((player) => {
+                        const pos = playerPositions.find(p => p.playerId === player.id);
+                        if (!pos || pitchDimensions.width === 0) return null;
+                        const scaleX = compactPitchDimensions.width / pitchDimensions.width;
+                        const scaleY = compactPitchDimensions.height / pitchDimensions.height;
+                        const rotatedX = (1 - (pos.y + 25) / pitchDimensions.height) * compactPitchDimensions.width - 14;
+                        const rotatedY = ((pos.x + 25) / pitchDimensions.width) * compactPitchDimensions.height - 14;
+                        return (
+                          <DraggablePlayer
+                            key={player.id}
+                            player={player}
+                            position={{ x: rotatedX, y: rotatedY }}
+                            pitchDimensions={compactPitchDimensions}
+                            onPositionChange={() => {}}
+                            onTap={() => {}}
+                            disabled={true}
+                            compact={true}
+                          />
+                        );
+                      })}
+                    </View>
+                  </View>
+                  <ThemedText type="caption" style={styles.tapHint}>
+                    Tap to expand and edit formation
+                  </ThemedText>
+                </View>
+              )}
+            </Pressable>
 
             <View style={styles.benchContainer}>
               <ThemedText type="small" style={styles.benchLabel}>
@@ -1055,7 +1168,7 @@ export default function LiveMatchScreen() {
                 />
               </View>
             ) : null}
-          </View>
+          </ScrollView>
         )}
       </View>
 
@@ -1577,12 +1690,28 @@ const styles = StyleSheet.create({
   deleteEventAction: { width: 60, backgroundColor: AppColors.redCard, justifyContent: "center", alignItems: "center" },
   
   formationContainer: { flex: 1 },
-  pitchContainer: { flex: 1, justifyContent: "center" },
-  pitch: { width: "100%", aspectRatio: 1.5, backgroundColor: "#1a472a", borderRadius: BorderRadius.md, borderWidth: 2, borderColor: "#2a6a3a", position: "relative", overflow: "hidden" },
+  formationContent: { paddingBottom: Spacing.md },
+  
+  compactPitchContainer: { alignItems: "center", marginBottom: Spacing.sm },
+  compactPitch: { width: "100%", aspectRatio: 2.2, backgroundColor: "#1a472a", borderRadius: BorderRadius.md, borderWidth: 2, borderColor: "#2a6a3a", position: "relative", overflow: "hidden" },
+  compactCenterCircle: { position: "absolute", width: 30, height: 30, borderRadius: 15, borderWidth: 1.5, borderColor: "rgba(255,255,255,0.3)", left: "50%", top: "50%", marginLeft: -15, marginTop: -15 },
+  compactCenterLine: { position: "absolute", height: 1.5, width: "100%", backgroundColor: "rgba(255,255,255,0.3)", top: "50%", marginTop: -0.75 },
+  compactGoalAreaLeft: { position: "absolute", width: 25, height: 50, borderWidth: 1.5, borderColor: "rgba(255,255,255,0.3)", borderLeftWidth: 0, left: 0, top: "50%", marginTop: -25 },
+  compactGoalAreaRight: { position: "absolute", width: 25, height: 50, borderWidth: 1.5, borderColor: "rgba(255,255,255,0.3)", borderRightWidth: 0, right: 0, top: "50%", marginTop: -25 },
+  compactPlayerCircle: { position: "absolute", width: 28, height: 28, borderRadius: 14, backgroundColor: AppColors.pitchGreen, justifyContent: "center", alignItems: "center", borderWidth: 1.5, borderColor: "#FFFFFF" },
+  compactPlayerText: { color: "#FFFFFF", fontWeight: "700", fontSize: 8 },
+  
+  expandedPitchContainer: { alignItems: "center", marginBottom: Spacing.sm },
+  expandedPitch: { width: "100%", aspectRatio: 0.65, backgroundColor: "#1a472a", borderRadius: BorderRadius.md, borderWidth: 2, borderColor: "#2a6a3a", position: "relative", overflow: "hidden" },
+  pitchPenaltyAreaTop: { position: "absolute", width: "55%", height: "18%", borderWidth: 2, borderColor: "rgba(255,255,255,0.3)", borderTopWidth: 0, left: "22.5%", top: 0 },
+  pitchGoalBoxTop: { position: "absolute", width: "25%", height: "8%", borderWidth: 2, borderColor: "rgba(255,255,255,0.3)", borderTopWidth: 0, left: "37.5%", top: 0 },
+  pitchPenaltyAreaBottom: { position: "absolute", width: "55%", height: "18%", borderWidth: 2, borderColor: "rgba(255,255,255,0.3)", borderBottomWidth: 0, left: "22.5%", bottom: 0 },
+  pitchGoalBoxBottom: { position: "absolute", width: "25%", height: "8%", borderWidth: 2, borderColor: "rgba(255,255,255,0.3)", borderBottomWidth: 0, left: "37.5%", bottom: 0 },
   pitchCenterCircle: { position: "absolute", width: 60, height: 60, borderRadius: 30, borderWidth: 2, borderColor: "rgba(255,255,255,0.3)", left: "50%", top: "50%", marginLeft: -30, marginTop: -30 },
-  pitchCenterLine: { position: "absolute", width: 2, height: "100%", backgroundColor: "rgba(255,255,255,0.3)", left: "50%", marginLeft: -1 },
-  pitchGoalAreaTop: { position: "absolute", width: 80, height: 30, borderWidth: 2, borderColor: "rgba(255,255,255,0.3)", borderTopWidth: 0, left: "50%", marginLeft: -40, top: 0 },
-  pitchGoalAreaBottom: { position: "absolute", width: 80, height: 30, borderWidth: 2, borderColor: "rgba(255,255,255,0.3)", borderBottomWidth: 0, left: "50%", marginLeft: -40, bottom: 0 },
+  pitchCenterLine: { position: "absolute", width: "100%", height: 2, backgroundColor: "rgba(255,255,255,0.3)", top: "50%", marginTop: -1 },
+  
+  tapHint: { color: AppColors.textDisabled, textAlign: "center", marginTop: Spacing.xs },
+  
   playersGrid: { position: "absolute", width: "100%", height: "100%" },
   draggablePlayerCircle: { position: "absolute", width: 50, height: 50, borderRadius: 25, backgroundColor: AppColors.pitchGreen, justifyContent: "center", alignItems: "center", borderWidth: 2, borderColor: "#FFFFFF" },
   playerCircleText: { color: "#FFFFFF", fontWeight: "700", fontSize: 12 },
