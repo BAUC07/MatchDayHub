@@ -458,6 +458,12 @@ export default function LiveMatchScreen() {
         scoreFor += 1;
       } else if (event.type === "goal_against") {
         scoreAgainst += 1;
+      } else if (event.type === "penalty" && event.penaltyOutcome === "scored") {
+        if (event.isForTeam) {
+          scoreFor += 1;
+        } else {
+          scoreAgainst += 1;
+        }
       }
 
       const updatedMatch = {
