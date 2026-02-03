@@ -19,10 +19,10 @@ MatchDay is a cross-platform mobile application (iOS and Android) designed for g
     - **Teams Management**: Create, view, and manage teams, including an upgrade prompt for additional teams.
     - **Squad Editor**: Add, edit, and remove players with name and optional squad number.
     - **Match Setup**: Configure opposition, location, format (5v5 to 11v11), and duration. Features auto-populated lineups based on format, and the ability to mark players as unavailable with drag-and-drop functionality.
-    - **Live Match**: Tabbed interface displaying match events timeline and team formation pitch diagram. Includes a 6-button grid for rapid event logging (goals, cards, penalties, substitutions, notes), a smart timer with half-time logic, and real-time timestamping of events. Supports red card management, re-substitution, and in-match player repositioning.
+    - **Live Match**: Tabbed interface with Events and Formation tabs, plus Notes pop-out button. Includes a 5-button grid for rapid event logging (Goal+, Goal-, Penalty on row 1; Card, Sub on row 2), a smart timer with half-time logic, and real-time timestamping of events. Supports red card management, re-substitution, and in-match player repositioning.
     - **Stats Tracking**: Provides detailed team and player statistics including results, goal sources, goals scored/conceded, top scorers/assists, cards received, and minutes played. Includes date range filtering and PDF export.
     - **Match Summary**: Displays final score, key stats, detailed timeline of events, and match notes at the bottom.
-    - **Match Notes**: Add notes during live matches via Notes button; notes display on Match Summary screen.
+    - **Match Notes**: Notes button opens a floating pop-out window that sits above the keyboard. Has a minimize button in the top-right corner to close and return to the match screen. Notes auto-save and display on Match Summary screen.
 
 ### Backend (Express.js)
 - Serves static Expo files for web and manifest for mobile applications.
@@ -45,6 +45,11 @@ MatchDay is a cross-platform mobile application (iOS and Android) designed for g
 - **RevenueCat**: Integrated for future in-app purchases, currently used for code-based feature unlocks.
 
 ## Version History
+
+### v1.2.1 (2026-02-03)
+- Notes feature redesigned: now opens as floating pop-out window above keyboard with minimize button in top-right corner
+- Action buttons reduced to 5: Row 1 (Goal+, Goal-, Penalty), Row 2 (Card, Sub)
+- Notes button styled as tab but opens pop-out overlay instead of inline content
 
 ### v1.2.0 (2026-02-02)
 - Added Match Notes feature: Notes button on Live Match screen opens modal with auto-save

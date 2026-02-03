@@ -12,6 +12,8 @@ import {
   AppState,
   AppStateStatus,
   TextInput,
+  KeyboardAvoidingView,
+  Platform,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
@@ -35,7 +37,7 @@ type LiveMatchRouteProp = RouteProp<RootStackParamList, "LiveMatch">;
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
 type ActionType = "goal_for" | "goal_against" | "card" | "penalty" | "sub";
-type TabType = "events" | "formation" | "notes";
+type TabType = "events" | "formation";
 
 interface LiveTimerProps {
   startTimestamp: number | null;
@@ -243,6 +245,7 @@ export default function LiveMatchScreen() {
   const [compactPitchDimensions, setCompactPitchDimensions] = useState({ width: 0, height: 0 });
   const [isFormationExpanded, setIsFormationExpanded] = useState(false);
   const [notesText, setNotesText] = useState("");
+  const [showNotesPopout, setShowNotesPopout] = useState(false);
 
   const lastSaveRef = useRef<number>(0);
   const notesTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1014,10 +1017,13 @@ export default function LiveMatchScreen() {
           </ThemedText>
         </Pressable>
         <Pressable
-          style={[styles.tab, activeTab === "notes" && styles.tabActive]}
-          onPress={() => { Haptics.selectionAsync(); setActiveTab("notes"); }}
+          style={[styles.tab, showNotesPopout && styles.tabActive]}
+          onPress={() => { 
+            Haptics.selectionAsync(); 
+            setShowNotesPopout(true); 
+          }}
         >
-          <ThemedText type="body" style={[styles.tabText, activeTab === "notes" && styles.tabTextActive]}>
+          <ThemedText type="body" style={[styles.tabText, showNotesPopout && styles.tabTextActive]}>
             Notes
           </ThemedText>
         </Pressable>
@@ -1208,27 +1214,6 @@ export default function LiveMatchScreen() {
               </View>
             ) : null}
           </ScrollView>
-        ) : activeTab === "notes" ? (
-          <View style={styles.notesTabContainer}>
-            <ScrollView 
-              style={styles.notesScrollView}
-              contentContainerStyle={styles.notesScrollContent}
-              keyboardShouldPersistTaps="handled"
-            >
-              <TextInput
-                style={styles.notesInput}
-                value={notesText}
-                onChangeText={handleNotesChange}
-                placeholder="Add notes about the match..."
-                placeholderTextColor={AppColors.textSecondary}
-                multiline
-                textAlignVertical="top"
-              />
-            </ScrollView>
-            <ThemedText type="caption" style={styles.notesHint}>
-              Notes are saved automatically
-            </ThemedText>
-          </View>
         ) : null}
       </View>
 
@@ -1365,6 +1350,51 @@ export default function LiveMatchScreen() {
             </View>
           </View>
         </View>
+      </Modal>
+
+      <Modal 
+        visible={showNotesPopout} 
+        transparent 
+        animationType="slide" 
+        onRequestClose={() => setShowNotesPopout(false)}
+      >
+        <KeyboardAvoidingView 
+          style={notesPopoutStyles.container}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+        >
+          <Pressable 
+            style={notesPopoutStyles.backdrop} 
+            onPress={() => setShowNotesPopout(false)} 
+          />
+          <View style={[notesPopoutStyles.popout, { marginBottom: insets.bottom + Spacing.md }]}>
+            <View style={notesPopoutStyles.header}>
+              <ThemedText type="h4" style={notesPopoutStyles.title}>Match Notes</ThemedText>
+              <Pressable 
+                style={notesPopoutStyles.minimizeButton}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  setShowNotesPopout(false);
+                }}
+                hitSlop={8}
+              >
+                <Feather name="minimize-2" size={20} color={AppColors.textPrimary} />
+              </Pressable>
+            </View>
+            <TextInput
+              style={notesPopoutStyles.input}
+              value={notesText}
+              onChangeText={handleNotesChange}
+              placeholder="Add notes about the match..."
+              placeholderTextColor={AppColors.textSecondary}
+              multiline
+              textAlignVertical="top"
+              autoFocus
+            />
+            <ThemedText type="caption" style={notesPopoutStyles.hint}>
+              Notes are saved automatically
+            </ThemedText>
+          </View>
+        </KeyboardAvoidingView>
       </Modal>
 
     </View>
@@ -1797,12 +1827,6 @@ const styles = StyleSheet.create({
   cardButton: { backgroundColor: AppColors.warningYellow },
   penaltyButton: { backgroundColor: "#6a4a8a" },
   subButton: { backgroundColor: "#3a5a8a" },
-  
-  notesTabContainer: { flex: 1, padding: Spacing.md },
-  notesScrollView: { flex: 1 },
-  notesScrollContent: { flexGrow: 1 },
-  notesInput: { flex: 1, backgroundColor: AppColors.elevated, borderRadius: BorderRadius.sm, padding: Spacing.md, color: AppColors.textPrimary, fontSize: 16, minHeight: 150, textAlignVertical: "top" },
-  notesHint: { color: AppColors.textSecondary, marginTop: Spacing.sm, textAlign: "center" },
 });
 
 const sheetStyles = StyleSheet.create({
@@ -1845,4 +1869,42 @@ const confirmStyles = StyleSheet.create({
   cancelText: { color: AppColors.textSecondary },
   confirmButton: { flex: 1, paddingVertical: Spacing.md, backgroundColor: AppColors.redCard, borderRadius: BorderRadius.sm, alignItems: "center" },
   confirmText: { color: "#FFFFFF" },
+});
+
+const notesPopoutStyles = StyleSheet.create({
+  container: { flex: 1, justifyContent: "flex-end" },
+  backdrop: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.5)" },
+  popout: { 
+    backgroundColor: AppColors.surface, 
+    marginHorizontal: Spacing.md, 
+    borderRadius: BorderRadius.lg, 
+    padding: Spacing.lg,
+    maxHeight: SCREEN_HEIGHT * 0.5,
+  },
+  header: { 
+    flexDirection: "row", 
+    justifyContent: "space-between", 
+    alignItems: "center", 
+    marginBottom: Spacing.md 
+  },
+  title: { color: AppColors.textPrimary },
+  minimizeButton: { 
+    width: 36, 
+    height: 36, 
+    borderRadius: BorderRadius.sm, 
+    backgroundColor: AppColors.elevated, 
+    justifyContent: "center", 
+    alignItems: "center" 
+  },
+  input: { 
+    backgroundColor: AppColors.elevated, 
+    borderRadius: BorderRadius.sm, 
+    padding: Spacing.md, 
+    color: AppColors.textPrimary, 
+    fontSize: 16, 
+    minHeight: 120, 
+    maxHeight: 200,
+    textAlignVertical: "top" 
+  },
+  hint: { color: AppColors.textSecondary, marginTop: Spacing.sm, textAlign: "center" },
 });
