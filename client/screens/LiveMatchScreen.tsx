@@ -37,7 +37,7 @@ type LiveMatchRouteProp = RouteProp<RootStackParamList, "LiveMatch">;
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
 type ActionType = "goal_for" | "goal_against" | "card" | "penalty" | "sub";
-type TabType = "events" | "formation";
+type TabType = "events" | "formation" | "notes";
 
 interface LiveTimerProps {
   startTimestamp: number | null;
@@ -1017,13 +1017,13 @@ export default function LiveMatchScreen() {
           </ThemedText>
         </Pressable>
         <Pressable
-          style={[styles.tab, showNotesPopout && styles.tabActive]}
+          style={[styles.tab, activeTab === "notes" && styles.tabActive]}
           onPress={() => { 
             Haptics.selectionAsync(); 
-            setShowNotesPopout(true); 
+            setActiveTab("notes"); 
           }}
         >
-          <ThemedText type="body" style={[styles.tabText, showNotesPopout && styles.tabTextActive]}>
+          <ThemedText type="body" style={[styles.tabText, activeTab === "notes" && styles.tabTextActive]}>
             Notes
           </ThemedText>
         </Pressable>
@@ -1214,6 +1214,38 @@ export default function LiveMatchScreen() {
               </View>
             ) : null}
           </ScrollView>
+        ) : activeTab === "notes" ? (
+          <View style={styles.notesContainer}>
+            <Pressable 
+              style={styles.notesContentArea}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                setShowNotesPopout(true);
+              }}
+            >
+              {notesText.trim() ? (
+                <ScrollView 
+                  style={styles.notesScrollView}
+                  contentContainerStyle={styles.notesScrollContent}
+                  showsVerticalScrollIndicator={true}
+                >
+                  <ThemedText type="body" style={styles.notesDisplayText}>
+                    {notesText}
+                  </ThemedText>
+                </ScrollView>
+              ) : (
+                <View style={styles.emptyNotes}>
+                  <Feather name="edit-3" size={40} color={AppColors.textDisabled} />
+                  <ThemedText type="body" style={{ color: AppColors.textDisabled, marginTop: Spacing.md }}>
+                    No notes yet
+                  </ThemedText>
+                  <ThemedText type="small" style={{ color: AppColors.textDisabled }}>
+                    Tap here to add match notes
+                  </ThemedText>
+                </View>
+              )}
+            </Pressable>
+          </View>
         ) : null}
       </View>
 
@@ -1827,6 +1859,13 @@ const styles = StyleSheet.create({
   cardButton: { backgroundColor: AppColors.warningYellow },
   penaltyButton: { backgroundColor: "#6a4a8a" },
   subButton: { backgroundColor: "#3a5a8a" },
+  
+  notesContainer: { flex: 1 },
+  notesContentArea: { flex: 1, backgroundColor: AppColors.surface, borderRadius: BorderRadius.sm, margin: Spacing.sm },
+  notesScrollView: { flex: 1 },
+  notesScrollContent: { padding: Spacing.md },
+  notesDisplayText: { color: AppColors.textPrimary, fontSize: 16, lineHeight: 24 },
+  emptyNotes: { flex: 1, justifyContent: "center", alignItems: "center" },
 });
 
 const sheetStyles = StyleSheet.create({
