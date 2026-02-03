@@ -35,7 +35,7 @@ type LiveMatchRouteProp = RouteProp<RootStackParamList, "LiveMatch">;
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
 type ActionType = "goal_for" | "goal_against" | "card" | "penalty" | "sub";
-type TabType = "events" | "formation";
+type TabType = "events" | "formation" | "notes";
 
 interface LiveTimerProps {
   startTimestamp: number | null;
@@ -242,7 +242,6 @@ export default function LiveMatchScreen() {
   const [pitchDimensions, setPitchDimensions] = useState({ width: 0, height: 0 });
   const [compactPitchDimensions, setCompactPitchDimensions] = useState({ width: 0, height: 0 });
   const [isFormationExpanded, setIsFormationExpanded] = useState(false);
-  const [showNotesModal, setShowNotesModal] = useState(false);
   const [notesText, setNotesText] = useState("");
 
   const lastSaveRef = useRef<number>(0);
@@ -1003,7 +1002,7 @@ export default function LiveMatchScreen() {
           onPress={() => { Haptics.selectionAsync(); setActiveTab("events"); }}
         >
           <ThemedText type="body" style={[styles.tabText, activeTab === "events" && styles.tabTextActive]}>
-            Match Events
+            Events
           </ThemedText>
         </Pressable>
         <Pressable
@@ -1011,7 +1010,15 @@ export default function LiveMatchScreen() {
           onPress={() => { Haptics.selectionAsync(); setActiveTab("formation"); }}
         >
           <ThemedText type="body" style={[styles.tabText, activeTab === "formation" && styles.tabTextActive]}>
-            Team Formation
+            Formation
+          </ThemedText>
+        </Pressable>
+        <Pressable
+          style={[styles.tab, activeTab === "notes" && styles.tabActive]}
+          onPress={() => { Haptics.selectionAsync(); setActiveTab("notes"); }}
+        >
+          <ThemedText type="body" style={[styles.tabText, activeTab === "notes" && styles.tabTextActive]}>
+            Notes
           </ThemedText>
         </Pressable>
       </View>
@@ -1064,7 +1071,7 @@ export default function LiveMatchScreen() {
               />
             )}
           </View>
-        ) : (
+        ) : activeTab === "formation" ? (
           <ScrollView style={styles.formationContainer} contentContainerStyle={styles.formationContent}>
             <Pressable
               onPress={() => {
@@ -1201,7 +1208,28 @@ export default function LiveMatchScreen() {
               </View>
             ) : null}
           </ScrollView>
-        )}
+        ) : activeTab === "notes" ? (
+          <View style={styles.notesTabContainer}>
+            <ScrollView 
+              style={styles.notesScrollView}
+              contentContainerStyle={styles.notesScrollContent}
+              keyboardShouldPersistTaps="handled"
+            >
+              <TextInput
+                style={styles.notesInput}
+                value={notesText}
+                onChangeText={handleNotesChange}
+                placeholder="Add notes about the match..."
+                placeholderTextColor={AppColors.textSecondary}
+                multiline
+                textAlignVertical="top"
+              />
+            </ScrollView>
+            <ThemedText type="caption" style={styles.notesHint}>
+              Notes are saved automatically
+            </ThemedText>
+          </View>
+        ) : null}
       </View>
 
       <View style={[styles.bottomBar, { paddingBottom: insets.bottom + Spacing.sm }]}>
@@ -1237,21 +1265,6 @@ export default function LiveMatchScreen() {
           <Pressable
             style={({ pressed }) => [
               styles.actionButton,
-              styles.cardButton,
-              { opacity: pressed ? 0.9 : 1 },
-            ]}
-            onPress={() => openActionSheet("card")}
-          >
-            <ThemedText type="body" style={[styles.actionButtonText, { color: "#000" }]}>
-              Card
-            </ThemedText>
-          </Pressable>
-        </View>
-
-        <View style={styles.actionButtonsRow}>
-          <Pressable
-            style={({ pressed }) => [
-              styles.actionButton,
               styles.penaltyButton,
               { opacity: pressed ? 0.9 : 1 },
             ]}
@@ -1260,6 +1273,21 @@ export default function LiveMatchScreen() {
             <Feather name="circle" size={16} color="#FFFFFF" style={{ marginRight: 4 }} />
             <ThemedText type="body" style={styles.actionButtonText}>
               Penalty
+            </ThemedText>
+          </Pressable>
+        </View>
+
+        <View style={styles.actionButtonsRow}>
+          <Pressable
+            style={({ pressed }) => [
+              styles.actionButton,
+              styles.cardButton,
+              { opacity: pressed ? 0.9 : 1 },
+            ]}
+            onPress={() => openActionSheet("card")}
+          >
+            <ThemedText type="body" style={[styles.actionButtonText, { color: "#000" }]}>
+              Card
             </ThemedText>
           </Pressable>
 
@@ -1274,20 +1302,6 @@ export default function LiveMatchScreen() {
             <Feather name="refresh-cw" size={16} color="#FFFFFF" style={{ marginRight: 4 }} />
             <ThemedText type="body" style={styles.actionButtonText}>
               Sub
-            </ThemedText>
-          </Pressable>
-
-          <Pressable
-            style={({ pressed }) => [
-              styles.actionButton,
-              styles.notesButton,
-              { opacity: pressed ? 0.9 : 1 },
-            ]}
-            onPress={() => setShowNotesModal(true)}
-          >
-            <Feather name="edit-3" size={16} color="#FFFFFF" style={{ marginRight: 4 }} />
-            <ThemedText type="body" style={styles.actionButtonText}>
-              Notes
             </ThemedText>
           </Pressable>
         </View>
@@ -1353,29 +1367,6 @@ export default function LiveMatchScreen() {
         </View>
       </Modal>
 
-      <Modal visible={showNotesModal} transparent animationType="slide" onRequestClose={() => setShowNotesModal(false)}>
-        <Pressable style={notesStyles.overlay} onPress={() => setShowNotesModal(false)}>
-          <Pressable style={[notesStyles.container, { paddingBottom: insets.bottom + Spacing.md }]} onPress={(e) => e.stopPropagation()}>
-            <View style={notesStyles.header}>
-              <ThemedText type="h4" style={notesStyles.title}>Match Notes</ThemedText>
-              <Pressable onPress={() => setShowNotesModal(false)} hitSlop={8}>
-                <Feather name="x" size={24} color={AppColors.textPrimary} />
-              </Pressable>
-            </View>
-            <TextInput
-              style={notesStyles.input}
-              value={notesText}
-              onChangeText={handleNotesChange}
-              placeholder="Add notes about the match..."
-              placeholderTextColor={AppColors.textSecondary}
-              multiline
-              textAlignVertical="top"
-              autoFocus
-            />
-            <ThemedText type="caption" style={notesStyles.hint}>Notes are saved automatically</ThemedText>
-          </Pressable>
-        </Pressable>
-      </Modal>
     </View>
   );
 }
@@ -1806,16 +1797,12 @@ const styles = StyleSheet.create({
   cardButton: { backgroundColor: AppColors.warningYellow },
   penaltyButton: { backgroundColor: "#6a4a8a" },
   subButton: { backgroundColor: "#3a5a8a" },
-  notesButton: { backgroundColor: "#5a5a5a" },
-});
-
-const notesStyles = StyleSheet.create({
-  overlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" },
-  container: { backgroundColor: AppColors.surface, borderTopLeftRadius: BorderRadius.lg, borderTopRightRadius: BorderRadius.lg, padding: Spacing.lg, maxHeight: "60%" },
-  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: Spacing.md },
-  title: { color: AppColors.textPrimary },
-  input: { backgroundColor: AppColors.elevated, borderRadius: BorderRadius.sm, padding: Spacing.md, color: AppColors.textPrimary, fontSize: 16, minHeight: 150, textAlignVertical: "top" },
-  hint: { color: AppColors.textSecondary, marginTop: Spacing.sm, textAlign: "center" },
+  
+  notesTabContainer: { flex: 1, padding: Spacing.md },
+  notesScrollView: { flex: 1 },
+  notesScrollContent: { flexGrow: 1 },
+  notesInput: { flex: 1, backgroundColor: AppColors.elevated, borderRadius: BorderRadius.sm, padding: Spacing.md, color: AppColors.textPrimary, fontSize: 16, minHeight: 150, textAlignVertical: "top" },
+  notesHint: { color: AppColors.textSecondary, marginTop: Spacing.sm, textAlign: "center" },
 });
 
 const sheetStyles = StyleSheet.create({
