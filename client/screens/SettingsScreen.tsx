@@ -15,7 +15,7 @@ import { Spacing, AppColors, BorderRadius } from "@/constants/theme";
 import { useRevenueCat } from "@/lib/revenuecat";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { generateDemoData } from "@/lib/demoData";
-import { saveTeam, saveMatches, getMatches } from "@/lib/storage";
+import { saveTeam, saveMatches, getMatches, clearAllData } from "@/lib/storage";
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -83,6 +83,45 @@ export default function SettingsScreen() {
   }, [restorePurchases]);
 
   const [loadingDemo, setLoadingDemo] = useState(false);
+  const [showDevSection, setShowDevSection] = useState(false);
+  const [versionTapCount, setVersionTapCount] = useState(0);
+
+  const handleVersionTap = useCallback(() => {
+    const newCount = versionTapCount + 1;
+    setVersionTapCount(newCount);
+    if (newCount >= 5) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setShowDevSection(true);
+      setVersionTapCount(0);
+    } else if (newCount >= 3) {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+  }, [versionTapCount]);
+
+  const handleClearAllData = useCallback(async () => {
+    Alert.alert(
+      'Clear All Data',
+      'This will delete all teams, matches, and settings. This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Clear All',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+              await clearAllData();
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              Alert.alert('Data Cleared', 'All data has been deleted. Restart the app to begin fresh.');
+            } catch (error: any) {
+              Alert.alert('Error', error.message || 'Failed to clear data');
+            }
+          },
+        },
+      ]
+    );
+  }, []);
+
   const handleLoadDemoData = useCallback(async () => {
     if (loadingDemo) return;
     setLoadingDemo(true);
@@ -238,19 +277,12 @@ export default function SettingsScreen() {
       </ThemedText>
 
       <Card elevation={2} style={styles.aboutCard}>
-        <View style={styles.aboutItem}>
+        <Pressable style={styles.aboutItem} onPress={handleVersionTap}>
           <ThemedText type="body">Version</ThemedText>
           <ThemedText type="body" style={{ color: AppColors.textSecondary }}>
             1.2.2
           </ThemedText>
-        </View>
-        <View style={styles.divider} />
-        <View style={styles.aboutItem}>
-          <ThemedText type="body">Build</ThemedText>
-          <ThemedText type="body" style={{ color: AppColors.textSecondary }}>
-            5
-          </ThemedText>
-        </View>
+        </Pressable>
       </Card>
 
       <ThemedText type="small" style={styles.sectionTitle}>
@@ -287,30 +319,49 @@ export default function SettingsScreen() {
         </Pressable>
       </Card>
 
-      <ThemedText type="small" style={styles.sectionTitle}>
-        DEVELOPER
-      </ThemedText>
-
-      <Card elevation={2} style={styles.aboutCard}>
-        <Pressable
-          style={({ pressed }) => [
-            styles.aboutItem,
-            { opacity: pressed ? 0.7 : 1 },
-          ]}
-          onPress={handleLoadDemoData}
-          disabled={loadingDemo}
-        >
-          <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.md }}>
-            <Feather name="database" size={20} color={AppColors.pitchGreen} />
-            <ThemedText type="body">
-              {loadingDemo ? "Loading..." : "Load Demo Data"}
-            </ThemedText>
-          </View>
-          <ThemedText type="small" style={{ color: AppColors.textSecondary }}>
-            For screenshots
+      {showDevSection ? (
+        <>
+          <ThemedText type="small" style={styles.sectionTitle}>
+            DEVELOPER
           </ThemedText>
-        </Pressable>
-      </Card>
+
+          <Card elevation={2} style={styles.aboutCard}>
+            <Pressable
+              style={({ pressed }) => [
+                styles.aboutItem,
+                { opacity: pressed ? 0.7 : 1 },
+              ]}
+              onPress={handleLoadDemoData}
+              disabled={loadingDemo}
+            >
+              <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.md }}>
+                <Feather name="database" size={20} color={AppColors.pitchGreen} />
+                <ThemedText type="body">
+                  {loadingDemo ? "Loading..." : "Load Demo Data"}
+                </ThemedText>
+              </View>
+              <ThemedText type="small" style={{ color: AppColors.textSecondary }}>
+                For screenshots
+              </ThemedText>
+            </Pressable>
+            <View style={styles.divider} />
+            <Pressable
+              style={({ pressed }) => [
+                styles.aboutItem,
+                { opacity: pressed ? 0.7 : 1 },
+              ]}
+              onPress={handleClearAllData}
+            >
+              <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.md }}>
+                <Feather name="trash-2" size={20} color={AppColors.redCard} />
+                <ThemedText type="body" style={{ color: AppColors.redCard }}>
+                  Clear All Data
+                </ThemedText>
+              </View>
+            </Pressable>
+          </Card>
+        </>
+      ) : null}
     </ScrollView>
   );
 }

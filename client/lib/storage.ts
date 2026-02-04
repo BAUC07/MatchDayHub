@@ -337,3 +337,13 @@ export async function setReviewPrompted(): Promise<void> {
     console.error("Error setting review prompted status:", error);
   }
 }
+
+export async function clearAllData(): Promise<void> {
+  try {
+    const keys = Object.values(STORAGE_KEYS);
+    await AsyncStorage.multiRemove(keys);
+  } catch (error) {
+    console.error("Error clearing all data:", error);
+    throw error;
+  }
+}
