@@ -16,11 +16,11 @@ MatchDay is a cross-platform mobile application (iOS and Android) designed for g
 - **State Management**: Local state primarily managed with AsyncStorage for persistence.
 - **UI/UX**: Custom components built on a "Stadium Bold" design system, utilizing a dark theme with pitch green (#00A86B) accents.
 - **Key Features**:
-    - **Teams Management**: Create, view, and manage teams, including an upgrade prompt for additional teams.
+    - **Teams Management**: Create, view, and manage teams. Free tier limited to 1 team; Elite tier allows unlimited teams.
     - **Squad Editor**: Add, edit, and remove players with name and optional squad number.
     - **Match Setup**: Configure opposition, location, format (5v5 to 11v11), and duration. Features auto-populated lineups based on format, and the ability to mark players as unavailable with drag-and-drop functionality.
     - **Live Match**: Tabbed interface with Events and Formation tabs, plus Notes pop-out button. Includes a 5-button grid for rapid event logging (Goal+, Goal-, Penalty on row 1; Card, Sub on row 2), a smart timer with half-time logic, and real-time timestamping of events. Supports red card management, re-substitution, and in-match player repositioning.
-    - **Stats Tracking**: Provides detailed team and player statistics including results, goal sources, goals scored/conceded, top scorers/assists, cards received, and minutes played. Includes date range filtering and PDF export.
+    - **Stats Tracking**: Provides detailed team and player statistics including results, goal sources, goals scored/conceded, top scorers/assists, cards received, and minutes played. Elite tier includes date range filtering and PDF export (hidden for free users).
     - **Match Summary**: Displays final score, key stats, detailed timeline of events, and match notes at the bottom.
     - **Match Notes**: Notes button opens a floating pop-out window that sits above the keyboard. Has a minimize button in the top-right corner to close and return to the match screen. Notes auto-save and display on Match Summary screen.
 
@@ -42,9 +42,20 @@ MatchDay is a cross-platform mobile application (iOS and Android) designed for g
 - **React Navigation**: For managing application navigation.
 - **Expo**: The development platform and framework for React Native.
 - **Express.js**: Backend web application framework for serving files.
-- **RevenueCat**: Integrated for future in-app purchases, currently used for code-based feature unlocks.
+- **RevenueCat**: Integrated for in-app purchases, currently using code-based feature unlocks (code: "MATCHDAYFEB2026"). Elite tier is hidden from UI - accessible only via Settings > enter unlock code.
+- **expo-store-review**: For prompting app store reviews after 3rd-5th completed match.
 
 ## Version History
+
+### v1.2.2 (2026-02-04) - App Store Ready
+- Implemented freemium model with hidden Elite tier (soft launch)
+  - Free tier: 1 team limit, last 5 matches visible, basic stats
+  - Elite tier: Unlimited teams, full match history, advanced stats with PDF export and date filtering
+  - Elite tier unlockable only via code "MATCHDAYFEB2026" in Settings (no upgrade prompts/banners)
+- Added onboarding tutorial for first-time users (3 steps: create team, add players, log matches)
+- Added review prompt (triggers after 3rd-5th completed match using expo-store-review)
+- Added Privacy Policy and Terms of Service links in Settings (required for App Store)
+- Storage keys: ONBOARDING_COMPLETED, COMPLETED_MATCH_COUNT, REVIEW_PROMPTED
 
 ### v1.2.1 (2026-02-03)
 - Notes tab shows content inline (like Events); tapping notes area opens floating pop-out for editing
