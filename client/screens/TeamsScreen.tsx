@@ -77,8 +77,8 @@ export default function TeamsScreen() {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       navigation.navigate("CreateTeam");
     } else {
+      // Team limit reached - don't show upgrade prompt (hidden Elite tier)
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-      navigation.navigate("Paywall");
     }
   }, [canAddTeam, navigation]);
 
@@ -252,7 +252,7 @@ export default function TeamsScreen() {
           >
             {canAddTeam
               ? "Add a new team to manage"
-              : "Upgrade to add more teams"}
+              : "Team limit reached"}
           </ThemedText>
         </View>
       </Pressable>

@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from "react";
-import { View, StyleSheet, Image, Pressable, Switch, ScrollView, Linking, Platform, Alert } from "react-native";
+import { View, StyleSheet, Image, Pressable, Switch, ScrollView, Linking, Platform, Alert, TextInput } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
@@ -25,12 +25,38 @@ export default function SettingsScreen() {
   const tabBarHeight = useBottomTabBarHeight();
   const { theme } = useTheme();
   const navigation = useNavigation<NavigationProp>();
-  const { isElite, restorePurchases } = useRevenueCat();
+  const { isElite, restorePurchases, unlockWithCode } = useRevenueCat();
+  const [showCodeInput, setShowCodeInput] = useState(false);
+  const [codeValue, setCodeValue] = useState('');
+  const [codeError, setCodeError] = useState('');
 
-  const handleUpgrade = useCallback(() => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    navigation.navigate("Paywall");
-  }, [navigation]);
+  const handleCodeSubmit = useCallback(async () => {
+    if (!codeValue.trim()) {
+      setCodeError('Please enter a code');
+      return;
+    }
+    const success = await unlockWithCode(codeValue);
+    if (success) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      Alert.alert('Unlocked!', 'Elite features are now available.');
+      setShowCodeInput(false);
+      setCodeValue('');
+      setCodeError('');
+    } else {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      setCodeError('Invalid code');
+    }
+  }, [codeValue, unlockWithCode]);
+
+  const handlePrivacyPolicy = useCallback(async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    await Linking.openURL('https://442apps.com/privacy');
+  }, []);
+
+  const handleTermsOfService = useCallback(async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    await Linking.openURL('https://442apps.com/terms');
+  }, []);
 
   const handleManageSubscription = useCallback(async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -142,44 +168,67 @@ export default function SettingsScreen() {
           </Pressable>
         ) : (
           <View style={styles.upgradeContainer}>
-            <View style={styles.featureList}>
-              <View style={styles.featureItem}>
-                <Feather name="check" size={16} color={AppColors.pitchGreen} />
-                <ThemedText type="small">Unlimited teams</ThemedText>
+            {showCodeInput ? (
+              <View style={styles.codeInputContainer}>
+                <TextInput
+                  style={styles.codeInput}
+                  placeholder="Enter code"
+                  placeholderTextColor={AppColors.textSecondary}
+                  value={codeValue}
+                  onChangeText={(text) => {
+                    setCodeValue(text);
+                    setCodeError('');
+                  }}
+                  autoCapitalize="characters"
+                  autoCorrect={false}
+                />
+                {codeError ? (
+                  <ThemedText type="small" style={styles.codeError}>
+                    {codeError}
+                  </ThemedText>
+                ) : null}
+                <View style={styles.codeButtonsRow}>
+                  <Pressable
+                    style={({ pressed }) => [
+                      styles.codeCancelButton,
+                      { opacity: pressed ? 0.8 : 1 },
+                    ]}
+                    onPress={() => {
+                      setShowCodeInput(false);
+                      setCodeValue('');
+                      setCodeError('');
+                    }}
+                  >
+                    <ThemedText type="small" style={{ color: AppColors.textSecondary }}>
+                      Cancel
+                    </ThemedText>
+                  </Pressable>
+                  <Pressable
+                    style={({ pressed }) => [
+                      styles.codeSubmitButton,
+                      { opacity: pressed ? 0.8 : 1 },
+                    ]}
+                    onPress={handleCodeSubmit}
+                  >
+                    <ThemedText type="small" style={{ color: '#FFFFFF' }}>
+                      Submit
+                    </ThemedText>
+                  </Pressable>
+                </View>
               </View>
-              <View style={styles.featureItem}>
-                <Feather name="check" size={16} color={AppColors.pitchGreen} />
-                <ThemedText type="small">Full match history</ThemedText>
-              </View>
-              <View style={styles.featureItem}>
-                <Feather name="check" size={16} color={AppColors.pitchGreen} />
-                <ThemedText type="small">Team statistics and PDF export</ThemedText>
-              </View>
-            </View>
-
-            <Pressable
-              style={({ pressed }) => [
-                styles.upgradeButton,
-                { opacity: pressed ? 0.8 : 1 },
-              ]}
-              onPress={handleUpgrade}
-            >
-              <ThemedText type="body" style={styles.upgradeButtonText}>
-                Upgrade to Elite
-              </ThemedText>
-            </Pressable>
-            
-            <Pressable
-              style={({ pressed }) => [
-                styles.restoreButton,
-                { opacity: pressed ? 0.8 : 1 },
-              ]}
-              onPress={handleRestorePurchases}
-            >
-              <ThemedText type="small" style={{ color: AppColors.textSecondary, textDecorationLine: 'underline' }}>
-                Restore Purchases
-              </ThemedText>
-            </Pressable>
+            ) : (
+              <Pressable
+                style={({ pressed }) => [
+                  styles.restoreButton,
+                  { opacity: pressed ? 0.8 : 1 },
+                ]}
+                onPress={() => setShowCodeInput(true)}
+              >
+                <ThemedText type="small" style={{ color: AppColors.textSecondary }}>
+                  Have a code?
+                </ThemedText>
+              </Pressable>
+            )}
           </View>
         )}
       </Card>
@@ -192,7 +241,7 @@ export default function SettingsScreen() {
         <View style={styles.aboutItem}>
           <ThemedText type="body">Version</ThemedText>
           <ThemedText type="body" style={{ color: AppColors.textSecondary }}>
-            1.1.0
+            1.2.1
           </ThemedText>
         </View>
         <View style={styles.divider} />
@@ -202,6 +251,40 @@ export default function SettingsScreen() {
             5
           </ThemedText>
         </View>
+      </Card>
+
+      <ThemedText type="small" style={styles.sectionTitle}>
+        LEGAL
+      </ThemedText>
+
+      <Card elevation={2} style={styles.aboutCard}>
+        <Pressable
+          style={({ pressed }) => [
+            styles.aboutItem,
+            { opacity: pressed ? 0.7 : 1 },
+          ]}
+          onPress={handlePrivacyPolicy}
+        >
+          <View style={styles.linkItem}>
+            <Feather name="shield" size={20} color={AppColors.textSecondary} />
+            <ThemedText type="body">Privacy Policy</ThemedText>
+          </View>
+          <Feather name="external-link" size={16} color={AppColors.textSecondary} />
+        </Pressable>
+        <View style={styles.divider} />
+        <Pressable
+          style={({ pressed }) => [
+            styles.aboutItem,
+            { opacity: pressed ? 0.7 : 1 },
+          ]}
+          onPress={handleTermsOfService}
+        >
+          <View style={styles.linkItem}>
+            <Feather name="file-text" size={20} color={AppColors.textSecondary} />
+            <ThemedText type="body">Terms of Service</ThemedText>
+          </View>
+          <Feather name="external-link" size={16} color={AppColors.textSecondary} />
+        </Pressable>
       </Card>
 
       <ThemedText type="small" style={styles.sectionTitle}>
@@ -311,8 +394,43 @@ const styles = StyleSheet.create({
     marginTop: Spacing.md,
     paddingVertical: Spacing.sm,
   },
+  codeInputContainer: {
+    gap: Spacing.md,
+  },
+  codeInput: {
+    backgroundColor: AppColors.surface,
+    borderRadius: BorderRadius.md,
+    padding: Spacing.md,
+    color: '#FFFFFF',
+    fontSize: 16,
+  },
+  codeError: {
+    color: AppColors.redCard,
+    textAlign: 'center',
+  },
+  codeButtonsRow: {
+    flexDirection: 'row',
+    gap: Spacing.md,
+    justifyContent: 'center',
+  },
+  codeCancelButton: {
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.lg,
+  },
+  codeSubmitButton: {
+    backgroundColor: AppColors.pitchGreen,
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.lg,
+    borderRadius: BorderRadius.md,
+  },
   aboutCard: {
     padding: Spacing.lg,
+    marginBottom: Spacing.md,
+  },
+  linkItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
   },
   aboutItem: {
     flexDirection: "row",
