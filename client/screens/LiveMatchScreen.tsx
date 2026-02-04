@@ -1818,7 +1818,7 @@ const styles = StyleSheet.create({
   compactPitchContainer: { alignItems: "center", marginBottom: Spacing.sm },
   compactPitch: { width: "100%", aspectRatio: 2.2, backgroundColor: "#1a472a", borderRadius: BorderRadius.md, borderWidth: 2, borderColor: "#2a6a3a", position: "relative", overflow: "hidden" },
   compactCenterCircle: { position: "absolute", width: 30, height: 30, borderRadius: 15, borderWidth: 1.5, borderColor: "rgba(255,255,255,0.3)", left: "50%", top: "50%", marginLeft: -15, marginTop: -15 },
-  compactCenterLine: { position: "absolute", height: 1.5, width: "100%", backgroundColor: "rgba(255,255,255,0.3)", top: "50%", marginTop: -0.75 },
+  compactCenterLine: { position: "absolute", width: 1.5, height: "100%", backgroundColor: "rgba(255,255,255,0.3)", left: "50%", marginLeft: -0.75 },
   compactGoalAreaLeft: { position: "absolute", width: 25, height: 50, borderWidth: 1.5, borderColor: "rgba(255,255,255,0.3)", borderLeftWidth: 0, left: 0, top: "50%", marginTop: -25 },
   compactGoalAreaRight: { position: "absolute", width: 25, height: 50, borderWidth: 1.5, borderColor: "rgba(255,255,255,0.3)", borderRightWidth: 0, right: 0, top: "50%", marginTop: -25 },
   compactPlayerCircle: { position: "absolute", width: 28, height: 28, borderRadius: 14, backgroundColor: AppColors.pitchGreen, justifyContent: "center", alignItems: "center", borderWidth: 1.5, borderColor: "#FFFFFF" },
