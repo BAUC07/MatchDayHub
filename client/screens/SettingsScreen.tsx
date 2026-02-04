@@ -207,8 +207,51 @@ export default function SettingsScreen() {
           </Pressable>
         ) : (
           <View style={styles.upgradeContainer}>
+            <View style={styles.comingSoonHeader}>
+              <Feather name="clock" size={16} color={AppColors.pitchGreen} />
+              <ThemedText type="body" style={{ color: AppColors.pitchGreen, fontWeight: '600' }}>
+                Coming Soon
+              </ThemedText>
+            </View>
+            
+            <View style={styles.featureList}>
+              <View style={styles.featureItem}>
+                <Feather name="bar-chart-2" size={16} color={AppColors.textSecondary} />
+                <ThemedText type="small" style={{ color: AppColors.textSecondary }}>
+                  Detailed Team and Player Stats
+                </ThemedText>
+              </View>
+              <View style={styles.featureItem}>
+                <Feather name="users" size={16} color={AppColors.textSecondary} />
+                <ThemedText type="small" style={{ color: AppColors.textSecondary }}>
+                  Unlimited Teams
+                </ThemedText>
+              </View>
+              <View style={styles.featureItem}>
+                <Feather name="list" size={16} color={AppColors.textSecondary} />
+                <ThemedText type="small" style={{ color: AppColors.textSecondary }}>
+                  Full Match History
+                </ThemedText>
+              </View>
+              <View style={styles.featureItem}>
+                <Feather name="calendar" size={16} color={AppColors.textSecondary} />
+                <ThemedText type="small" style={{ color: AppColors.textSecondary }}>
+                  Date Range Filtering
+                </ThemedText>
+              </View>
+              <View style={styles.featureItem}>
+                <Feather name="file-text" size={16} color={AppColors.textSecondary} />
+                <ThemedText type="small" style={{ color: AppColors.textSecondary }}>
+                  PDF Export
+                </ThemedText>
+              </View>
+            </View>
+
             {showCodeInput ? (
               <View style={styles.codeInputContainer}>
+                <ThemedText type="small" style={{ color: AppColors.textSecondary, marginBottom: Spacing.sm }}>
+                  Enter early access code
+                </ThemedText>
                 <TextInput
                   style={styles.codeInput}
                   placeholder="Enter code"
@@ -250,7 +293,7 @@ export default function SettingsScreen() {
                     onPress={handleCodeSubmit}
                   >
                     <ThemedText type="small" style={{ color: '#FFFFFF' }}>
-                      Submit
+                      Unlock
                     </ThemedText>
                   </Pressable>
                 </View>
@@ -258,13 +301,14 @@ export default function SettingsScreen() {
             ) : (
               <Pressable
                 style={({ pressed }) => [
-                  styles.restoreButton,
+                  styles.earlyAccessButton,
                   { opacity: pressed ? 0.8 : 1 },
                 ]}
                 onPress={() => setShowCodeInput(true)}
               >
-                <ThemedText type="small" style={{ color: AppColors.textSecondary }}>
-                  Have a code?
+                <Feather name="unlock" size={14} color={AppColors.pitchGreen} />
+                <ThemedText type="small" style={{ color: AppColors.pitchGreen }}>
+                  Have an early access code?
                 </ThemedText>
               </Pressable>
             )}
@@ -421,6 +465,23 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: AppColors.elevated,
     paddingTop: Spacing.lg,
+  },
+  comingSoonHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+    marginBottom: Spacing.md,
+  },
+  earlyAccessButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: Spacing.sm,
+    paddingVertical: Spacing.md,
+    borderWidth: 1,
+    borderColor: AppColors.pitchGreen,
+    borderRadius: BorderRadius.md,
+    borderStyle: "dashed",
   },
   featureList: {
     marginBottom: Spacing.lg,
