@@ -1148,10 +1148,10 @@ export default function StatsScreen() {
             <Feather name="lock" size={48} color={AppColors.pitchGreen} />
           </View>
           <ThemedText type="h3" style={styles.lockedTitle}>
-            Elite Feature
+            Advanced Stats
           </ThemedText>
           <ThemedText type="body" style={styles.lockedText}>
-            Upgrade to Elite to unlock detailed match statistics and performance insights.
+            Detailed match statistics and performance insights will be available soon.
           </ThemedText>
           <View style={styles.lockedFeatures}>
             <View style={styles.lockedFeatureItem}>
