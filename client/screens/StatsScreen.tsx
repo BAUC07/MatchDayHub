@@ -94,7 +94,7 @@ export default function StatsScreen() {
   const headerHeight = useHeaderHeight();
   const tabBarHeight = useBottomTabBarHeight();
   const navigation = useNavigation<NavigationProp>();
-  const { isElite } = useRevenueCat();
+  const { isElite, unlockWithCode } = useRevenueCat();
 
   const [matches, setMatches] = useState<Match[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
@@ -106,6 +106,10 @@ export default function StatsScreen() {
   const [endDate, setEndDate] = useState<Date>(new Date);
   const [showStartPicker, setShowStartPicker] = useState(false);
   const [showEndPicker, setShowEndPicker] = useState(false);
+  
+  const [showCodeInput, setShowCodeInput] = useState(false);
+  const [codeValue, setCodeValue] = useState('');
+  const [codeError, setCodeError] = useState('');
   
   const startInputRef = useRef<HTMLInputElement | null>(null);
   const endInputRef = useRef<HTMLInputElement | null>(null);
@@ -131,10 +135,23 @@ export default function StatsScreen() {
     }
   }, []);
 
-  const handleUpgrade = useCallback(() => {
+  const handleCodeSubmit = useCallback(async () => {
+    if (!codeValue.trim()) {
+      setCodeError('Please enter a code');
+      return;
+    }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    navigation.navigate("Paywall");
-  }, [navigation]);
+    const success = await unlockWithCode(codeValue.trim());
+    if (success) {
+      setShowCodeInput(false);
+      setCodeValue('');
+      setCodeError('');
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } else {
+      setCodeError('Invalid code');
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    }
+  }, [codeValue, unlockWithCode]);
 
   useFocusEffect(
     useCallback(() => {
@@ -1154,17 +1171,81 @@ export default function StatsScreen() {
               <ThemedText type="body" style={styles.lockedFeatureText}>Minutes played tracking</ThemedText>
             </View>
           </View>
-          <Pressable 
-            style={({ pressed }) => [
-              styles.upgradeButton,
-              { opacity: pressed ? 0.8 : 1 },
-            ]}
-            onPress={handleUpgrade}
-          >
-            <ThemedText type="body" style={styles.upgradeButtonText}>
-              Upgrade to Elite
-            </ThemedText>
-          </Pressable>
+          
+          <View style={styles.comingSoonContainer}>
+            <View style={styles.comingSoonHeader}>
+              <Feather name="clock" size={16} color={AppColors.pitchGreen} />
+              <ThemedText type="body" style={{ color: AppColors.pitchGreen, fontWeight: '600' }}>
+                Coming Soon
+              </ThemedText>
+            </View>
+            
+            {showCodeInput ? (
+              <View style={styles.codeInputContainer}>
+                <ThemedText type="small" style={{ color: AppColors.textSecondary, marginBottom: Spacing.sm }}>
+                  Enter early access code
+                </ThemedText>
+                <TextInput
+                  style={styles.codeInput}
+                  placeholder="Enter code"
+                  placeholderTextColor={AppColors.textSecondary}
+                  value={codeValue}
+                  onChangeText={(text) => {
+                    setCodeValue(text);
+                    setCodeError('');
+                  }}
+                  autoCapitalize="characters"
+                  autoCorrect={false}
+                />
+                {codeError ? (
+                  <ThemedText type="small" style={styles.codeError}>
+                    {codeError}
+                  </ThemedText>
+                ) : null}
+                <View style={styles.codeButtonsRow}>
+                  <Pressable
+                    style={({ pressed }) => [
+                      styles.codeCancelButton,
+                      { opacity: pressed ? 0.8 : 1 },
+                    ]}
+                    onPress={() => {
+                      setShowCodeInput(false);
+                      setCodeValue('');
+                      setCodeError('');
+                    }}
+                  >
+                    <ThemedText type="small" style={{ color: AppColors.textSecondary }}>
+                      Cancel
+                    </ThemedText>
+                  </Pressable>
+                  <Pressable
+                    style={({ pressed }) => [
+                      styles.codeSubmitButton,
+                      { opacity: pressed ? 0.8 : 1 },
+                    ]}
+                    onPress={handleCodeSubmit}
+                  >
+                    <ThemedText type="small" style={{ color: '#FFFFFF' }}>
+                      Unlock
+                    </ThemedText>
+                  </Pressable>
+                </View>
+              </View>
+            ) : (
+              <Pressable
+                style={({ pressed }) => [
+                  styles.earlyAccessButton,
+                  { opacity: pressed ? 0.8 : 1 },
+                ]}
+                onPress={() => setShowCodeInput(true)}
+              >
+                <Feather name="unlock" size={14} color={AppColors.pitchGreen} />
+                <ThemedText type="small" style={{ color: AppColors.pitchGreen }}>
+                  Have an early access code?
+                </ThemedText>
+              </Pressable>
+            )}
+          </View>
         </View>
       </ThemedView>
     );
@@ -1470,5 +1551,59 @@ const styles = StyleSheet.create({
   datePickerDone: {
     color: AppColors.pitchGreen,
     fontWeight: "600",
+  },
+  comingSoonContainer: {
+    marginTop: Spacing.lg,
+    borderTopWidth: 1,
+    borderTopColor: AppColors.elevated,
+    paddingTop: Spacing.lg,
+    width: "100%",
+  },
+  comingSoonHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: Spacing.sm,
+    marginBottom: Spacing.md,
+  },
+  codeInputContainer: {
+    gap: Spacing.md,
+  },
+  codeInput: {
+    backgroundColor: AppColors.surface,
+    borderRadius: BorderRadius.md,
+    padding: Spacing.md,
+    color: '#FFFFFF',
+    fontSize: 16,
+  },
+  codeError: {
+    color: AppColors.redCard,
+    textAlign: 'center',
+  },
+  codeButtonsRow: {
+    flexDirection: 'row',
+    gap: Spacing.md,
+    justifyContent: 'center',
+  },
+  codeCancelButton: {
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.lg,
+  },
+  codeSubmitButton: {
+    backgroundColor: AppColors.pitchGreen,
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.lg,
+    borderRadius: BorderRadius.md,
+  },
+  earlyAccessButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: Spacing.sm,
+    paddingVertical: Spacing.md,
+    borderWidth: 1,
+    borderColor: AppColors.pitchGreen,
+    borderRadius: BorderRadius.md,
+    borderStyle: "dashed",
   },
 });
