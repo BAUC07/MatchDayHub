@@ -1186,18 +1186,20 @@ export default function StatsScreen() {
           <ThemedText type="h2" style={styles.screenTitle}>
             Statistics
           </ThemedText>
-          <Pressable
-            style={({ pressed }) => [
-              styles.exportButton,
-              { opacity: pressed ? 0.7 : 1 },
-            ]}
-            onPress={handleExportPDF}
-          >
-            <Feather name="download" size={18} color="#FFFFFF" />
-            <ThemedText type="small" style={styles.exportButtonText}>
-              Export
-            </ThemedText>
-          </Pressable>
+          {isElite ? (
+            <Pressable
+              style={({ pressed }) => [
+                styles.exportButton,
+                { opacity: pressed ? 0.7 : 1 },
+              ]}
+              onPress={handleExportPDF}
+            >
+              <Feather name="download" size={18} color="#FFFFFF" />
+              <ThemedText type="small" style={styles.exportButtonText}>
+                Export
+              </ThemedText>
+            </Pressable>
+          ) : null}
         </View>
 
         {teams.length > 1 ? (
@@ -1233,7 +1235,7 @@ export default function StatsScreen() {
           </View>
         ) : null}
 
-        {renderDateFilters()}
+        {isElite ? renderDateFilters() : null}
         
         {renderFilterButtons()}
 

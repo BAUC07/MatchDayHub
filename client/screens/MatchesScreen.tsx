@@ -27,6 +27,7 @@ import { Match, Team } from "@/types";
 import { getMatches, getTeams, deleteMatch, saveMatch } from "@/lib/storage";
 import { formatDate, getMatchResult } from "@/lib/utils";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
+import { useRevenueCat } from "@/lib/revenuecat";
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -36,6 +37,7 @@ export default function MatchesScreen() {
   const tabBarHeight = useBottomTabBarHeight();
   const { theme } = useTheme();
   const navigation = useNavigation<NavigationProp>();
+  const { isElite } = useRevenueCat();
 
   const [matches, setMatches] = useState<Match[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
@@ -115,9 +117,16 @@ export default function MatchesScreen() {
     [teams]
   );
 
-  const filteredMatches = selectedTeamFilter
-    ? matches.filter((m) => m.teamId === selectedTeamFilter)
-    : matches;
+  const filteredMatches = (() => {
+    let result = selectedTeamFilter
+      ? matches.filter((m) => m.teamId === selectedTeamFilter)
+      : matches;
+    // Free users only see last 5 matches
+    if (!isElite) {
+      result = result.slice(0, 5);
+    }
+    return result;
+  })();
 
   const handleFilterPress = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
