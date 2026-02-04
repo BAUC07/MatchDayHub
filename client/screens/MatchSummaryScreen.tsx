@@ -22,9 +22,10 @@ import { Card } from "@/components/Card";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, AppColors, BorderRadius } from "@/constants/theme";
 import { Match, Team, MatchEvent } from "@/types";
-import { getMatch, getTeam } from "@/lib/storage";
+import { getMatch, getTeam, incrementCompletedMatchCount, getReviewPrompted, setReviewPrompted } from "@/lib/storage";
 import { formatMatchTime, formatDate, getMatchResult, countYellowCards, countRedCards, formatTimeWithAdded, formatTotalGameTime } from "@/lib/utils";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
+import * as StoreReview from "expo-store-review";
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 type MatchSummaryRouteProp = RouteProp<RootStackParamList, "MatchSummary">;
@@ -70,6 +71,36 @@ export default function MatchSummaryScreen() {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  // Track completed matches and prompt for review after 3rd-5th match
+  useEffect(() => {
+    const checkAndPromptReview = async () => {
+      if (!match?.isCompleted) return;
+      
+      const matchCount = await incrementCompletedMatchCount();
+      const alreadyPrompted = await getReviewPrompted();
+      
+      // Prompt for review between 3rd and 5th completed match (once only)
+      if (matchCount >= 3 && matchCount <= 5 && !alreadyPrompted) {
+        try {
+          const isAvailable = await StoreReview.isAvailableAsync();
+          if (isAvailable) {
+            await setReviewPrompted();
+            // Small delay before showing review prompt for better UX
+            setTimeout(async () => {
+              await StoreReview.requestReview();
+            }, 1500);
+          }
+        } catch (error) {
+          console.error("Error requesting review:", error);
+        }
+      }
+    };
+    
+    if (match) {
+      checkAndPromptReview();
+    }
+  }, [match?.isCompleted]);
 
   const handleDone = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { StyleSheet, View, Text, Pressable } from "react-native";
 import { NavigationContainer } from "@react-navigation/native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
@@ -12,6 +12,8 @@ import { queryClient } from "@/lib/query-client";
 import RootStackNavigator from "@/navigation/RootStackNavigator";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { RevenueCatProvider } from "@/lib/revenuecat";
+import { OnboardingModal } from "@/components/OnboardingModal";
+import { getOnboardingCompleted, setOnboardingCompleted } from "@/lib/storage";
 
 // STEP 2 TEST: Simulate LiveMatchScreen timer logic without navigation
 // This tests if the timer pattern from LiveMatchScreen works when rendered directly
@@ -112,6 +114,25 @@ const testStyles = StyleSheet.create({
 });
 
 export default function App() {
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [onboardingChecked, setOnboardingChecked] = useState(false);
+
+  useEffect(() => {
+    const checkOnboarding = async () => {
+      const completed = await getOnboardingCompleted();
+      if (!completed) {
+        setShowOnboarding(true);
+      }
+      setOnboardingChecked(true);
+    };
+    checkOnboarding();
+  }, []);
+
+  const handleOnboardingComplete = useCallback(async () => {
+    await setOnboardingCompleted();
+    setShowOnboarding(false);
+  }, []);
+
   // STEP 1 TEST: Render minimal test component with no navigation/providers
   if (ENABLE_TIMER_TEST) {
     return <TimerTestComponent />;
@@ -128,6 +149,12 @@ export default function App() {
                   <RootStackNavigator />
                 </NavigationContainer>
                 <StatusBar style="auto" />
+                {onboardingChecked ? (
+                  <OnboardingModal
+                    visible={showOnboarding}
+                    onComplete={handleOnboardingComplete}
+                  />
+                ) : null}
               </KeyboardProvider>
             </GestureHandlerRootView>
           </SafeAreaProvider>

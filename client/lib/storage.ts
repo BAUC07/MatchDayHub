@@ -8,6 +8,9 @@ const STORAGE_KEYS = {
   SUBSCRIPTION: "@matchday_subscription",
   CURRENT_MATCH: "@matchday_current_match",
   OPPOSITION_NAMES: "@matchday_opposition_names",
+  ONBOARDING_COMPLETED: "@matchday_onboarding_completed",
+  COMPLETED_MATCH_COUNT: "@matchday_completed_match_count",
+  REVIEW_PROMPTED: "@matchday_review_prompted",
 };
 
 const DEFAULT_SUBSCRIPTION: SubscriptionState = {
@@ -273,5 +276,64 @@ export async function deleteTeamLogo(teamId: string): Promise<void> {
     }
   } catch (error) {
     console.error("Error deleting team logo:", error);
+  }
+}
+
+// Onboarding and Review Prompt Storage
+export async function getOnboardingCompleted(): Promise<boolean> {
+  try {
+    const value = await AsyncStorage.getItem(STORAGE_KEYS.ONBOARDING_COMPLETED);
+    return value === "true";
+  } catch (error) {
+    console.error("Error getting onboarding status:", error);
+    return false;
+  }
+}
+
+export async function setOnboardingCompleted(): Promise<void> {
+  try {
+    await AsyncStorage.setItem(STORAGE_KEYS.ONBOARDING_COMPLETED, "true");
+  } catch (error) {
+    console.error("Error setting onboarding status:", error);
+  }
+}
+
+export async function getCompletedMatchCount(): Promise<number> {
+  try {
+    const value = await AsyncStorage.getItem(STORAGE_KEYS.COMPLETED_MATCH_COUNT);
+    return value ? parseInt(value, 10) : 0;
+  } catch (error) {
+    console.error("Error getting completed match count:", error);
+    return 0;
+  }
+}
+
+export async function incrementCompletedMatchCount(): Promise<number> {
+  try {
+    const current = await getCompletedMatchCount();
+    const newCount = current + 1;
+    await AsyncStorage.setItem(STORAGE_KEYS.COMPLETED_MATCH_COUNT, newCount.toString());
+    return newCount;
+  } catch (error) {
+    console.error("Error incrementing completed match count:", error);
+    return 0;
+  }
+}
+
+export async function getReviewPrompted(): Promise<boolean> {
+  try {
+    const value = await AsyncStorage.getItem(STORAGE_KEYS.REVIEW_PROMPTED);
+    return value === "true";
+  } catch (error) {
+    console.error("Error getting review prompted status:", error);
+    return false;
+  }
+}
+
+export async function setReviewPrompted(): Promise<void> {
+  try {
+    await AsyncStorage.setItem(STORAGE_KEYS.REVIEW_PROMPTED, "true");
+  } catch (error) {
+    console.error("Error setting review prompted status:", error);
   }
 }
