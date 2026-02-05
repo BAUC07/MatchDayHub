@@ -19,13 +19,14 @@ import { Feather } from "@expo/vector-icons";
 import { HeaderButton } from "@react-navigation/elements";
 import * as Haptics from "expo-haptics";
 import * as ImagePicker from "expo-image-picker";
+import * as FileSystem from "expo-file-system";
 
 import { ThemedText } from "@/components/ThemedText";
 import { Card } from "@/components/Card";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, AppColors, BorderRadius } from "@/constants/theme";
 import { Team, Player } from "@/types";
-import { getTeam, saveTeam, generateId, saveTeamLogo } from "@/lib/storage";
+import { getTeam, saveTeam, generateId } from "@/lib/storage";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
@@ -109,11 +110,27 @@ export default function SquadEditorScreen() {
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
       aspect: [1, 1],
-      quality: 0.8,
+      quality: 0.5,
+      base64: true,
     });
 
     if (!result.canceled && result.assets[0]) {
-      setLogoUri(result.assets[0].uri);
+      const asset = result.assets[0];
+      if (asset.base64) {
+        const dataUri = `data:image/jpeg;base64,${asset.base64}`;
+        setLogoUri(dataUri);
+      } else {
+        try {
+          const base64 = await FileSystem.readAsStringAsync(asset.uri, {
+            encoding: 'base64',
+          });
+          const dataUri = `data:image/jpeg;base64,${base64}`;
+          setLogoUri(dataUri);
+        } catch (error) {
+          console.error("Error reading image:", error);
+          Alert.alert("Error", "Could not load the selected image. Please try again.");
+        }
+      }
     }
   }, []);
 
@@ -122,23 +139,7 @@ export default function SquadEditorScreen() {
 
     setSaving(true);
     try {
-      let finalLogoUri: string | undefined = logoUri || undefined;
-      
-      if (logoUri && logoUri !== originalLogoRef.current) {
-        try {
-          finalLogoUri = await saveTeamLogo(logoUri, team.id);
-        } catch (logoError) {
-          console.error("Error saving logo:", logoError);
-          Alert.alert(
-            "Logo Save Failed",
-            "Could not save the club logo. The team will be saved without the logo change.",
-            [{ text: "OK" }]
-          );
-          finalLogoUri = originalLogoRef.current || undefined;
-        }
-      }
-      
-      const updatedTeam = { ...team, players, logoUri: finalLogoUri };
+      const updatedTeam = { ...team, players, logoUri: logoUri || undefined };
       await saveTeam(updatedTeam);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       navigation.goBack();
@@ -175,23 +176,7 @@ export default function SquadEditorScreen() {
 
     setSaving(true);
     try {
-      let finalLogoUri: string | undefined = logoUri || undefined;
-      
-      if (logoUri && logoUri !== originalLogoRef.current) {
-        try {
-          finalLogoUri = await saveTeamLogo(logoUri, team.id);
-        } catch (logoError) {
-          console.error("Error saving logo:", logoError);
-          Alert.alert(
-            "Logo Save Failed",
-            "Could not save the club logo. The team will be saved without the logo change.",
-            [{ text: "OK" }]
-          );
-          finalLogoUri = originalLogoRef.current || undefined;
-        }
-      }
-      
-      const updatedTeam = { ...team, players, logoUri: finalLogoUri };
+      const updatedTeam = { ...team, players, logoUri: logoUri || undefined };
       await saveTeam(updatedTeam);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       navigation.goBack();

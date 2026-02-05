@@ -233,34 +233,16 @@ async function ensureLogosDirectoryExists(): Promise<void> {
 
 export async function saveTeamLogo(tempUri: string, teamId: string): Promise<string> {
   try {
-    await ensureLogosDirectoryExists();
-    
-    const logosDir = getTeamLogosDir();
-    if (!logosDir) {
-      throw new Error("Document directory not available");
-    }
-    
-    const permanentPath = `${logosDir}${teamId}.jpg`;
-    
-    const existingFile = await FileSystem.getInfoAsync(permanentPath);
-    if (existingFile.exists) {
-      await FileSystem.deleteAsync(permanentPath, { idempotent: true });
+    if (tempUri.startsWith('data:')) {
+      return tempUri;
     }
     
     const base64 = await FileSystem.readAsStringAsync(tempUri, {
       encoding: 'base64',
     });
     
-    await FileSystem.writeAsStringAsync(permanentPath, base64, {
-      encoding: 'base64',
-    });
-    
-    const savedFile = await FileSystem.getInfoAsync(permanentPath);
-    if (!savedFile.exists) {
-      throw new Error("Failed to save logo file");
-    }
-    
-    return permanentPath;
+    const dataUri = `data:image/jpeg;base64,${base64}`;
+    return dataUri;
   } catch (error) {
     console.error("Error saving team logo:", error);
     throw error;
