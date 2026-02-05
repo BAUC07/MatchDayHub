@@ -162,7 +162,7 @@ export default function TeamDetailScreen() {
           styles.listContent,
           {
             paddingTop: headerHeight + Spacing.xl,
-            paddingBottom: 100 + insets.bottom,
+            paddingBottom: 120 + insets.bottom,
           },
         ]}
         data={[1]}

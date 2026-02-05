@@ -851,10 +851,9 @@ export default function LiveMatchScreen() {
     return goalType.replace("_", " ");
   };
 
-  const formatRealTime = (timestamp: number): string => {
-    if (!match?.kickoffTimestamp) return formatMatchTime(timestamp);
-    const eventTime = new Date(match.kickoffTimestamp + timestamp * 1000);
-    return eventTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const formatEventMinute = (timestamp: number): string => {
+    const mins = Math.floor(timestamp / 60);
+    return `${mins}'`;
   };
 
   const getEventIcon = (event: MatchEvent) => {
@@ -1063,7 +1062,7 @@ export default function LiveMatchScreen() {
                   >
                     <View style={styles.eventItem}>
                       <ThemedText type="body" style={styles.eventTime}>
-                        {formatRealTime(item.timestamp)}
+                        {formatEventMinute(item.timestamp)}
                       </ThemedText>
                       <View style={styles.eventIconWrapper}>
                         {getEventIcon(item)}
