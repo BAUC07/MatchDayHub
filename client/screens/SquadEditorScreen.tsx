@@ -125,7 +125,17 @@ export default function SquadEditorScreen() {
       let finalLogoUri: string | undefined = logoUri || undefined;
       
       if (logoUri && logoUri !== originalLogoRef.current) {
-        finalLogoUri = await saveTeamLogo(logoUri, team.id);
+        try {
+          finalLogoUri = await saveTeamLogo(logoUri, team.id);
+        } catch (logoError) {
+          console.error("Error saving logo:", logoError);
+          Alert.alert(
+            "Logo Save Failed",
+            "Could not save the club logo. The team will be saved without the logo change.",
+            [{ text: "OK" }]
+          );
+          finalLogoUri = originalLogoRef.current || undefined;
+        }
       }
       
       const updatedTeam = { ...team, players, logoUri: finalLogoUri };
@@ -135,6 +145,11 @@ export default function SquadEditorScreen() {
     } catch (error) {
       console.error("Error saving team:", error);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert(
+        "Save Failed",
+        "Could not save the team. Please try again.",
+        [{ text: "OK" }]
+      );
     } finally {
       setSaving(false);
     }
@@ -163,7 +178,17 @@ export default function SquadEditorScreen() {
       let finalLogoUri: string | undefined = logoUri || undefined;
       
       if (logoUri && logoUri !== originalLogoRef.current) {
-        finalLogoUri = await saveTeamLogo(logoUri, team.id);
+        try {
+          finalLogoUri = await saveTeamLogo(logoUri, team.id);
+        } catch (logoError) {
+          console.error("Error saving logo:", logoError);
+          Alert.alert(
+            "Logo Save Failed",
+            "Could not save the club logo. The team will be saved without the logo change.",
+            [{ text: "OK" }]
+          );
+          finalLogoUri = originalLogoRef.current || undefined;
+        }
       }
       
       const updatedTeam = { ...team, players, logoUri: finalLogoUri };
@@ -173,6 +198,11 @@ export default function SquadEditorScreen() {
     } catch (error) {
       console.error("Error saving team:", error);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert(
+        "Save Failed",
+        "Could not save the team. Please try again.",
+        [{ text: "OK" }]
+      );
     } finally {
       setSaving(false);
     }

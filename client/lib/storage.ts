@@ -240,18 +240,25 @@ export async function saveTeamLogo(tempUri: string, teamId: string): Promise<str
       throw new Error("Document directory not available");
     }
     
-    const fileExtension = tempUri.split('.').pop()?.toLowerCase() || 'jpg';
-    const permanentPath = `${logosDir}${teamId}.${fileExtension}`;
+    const permanentPath = `${logosDir}${teamId}.jpg`;
     
     const existingFile = await FileSystem.getInfoAsync(permanentPath);
     if (existingFile.exists) {
       await FileSystem.deleteAsync(permanentPath, { idempotent: true });
     }
     
-    await FileSystem.copyAsync({
-      from: tempUri,
-      to: permanentPath,
+    const base64 = await FileSystem.readAsStringAsync(tempUri, {
+      encoding: 'base64',
     });
+    
+    await FileSystem.writeAsStringAsync(permanentPath, base64, {
+      encoding: 'base64',
+    });
+    
+    const savedFile = await FileSystem.getInfoAsync(permanentPath);
+    if (!savedFile.exists) {
+      throw new Error("Failed to save logo file");
+    }
     
     return permanentPath;
   } catch (error) {
