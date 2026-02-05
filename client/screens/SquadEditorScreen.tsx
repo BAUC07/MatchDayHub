@@ -159,7 +159,13 @@ export default function SquadEditorScreen() {
 
     setSaving(true);
     try {
-      const updatedTeam = { ...team, players, logoUri: logoUri || undefined };
+      let finalLogoUri: string | undefined = logoUri || undefined;
+      
+      if (logoUri && logoUri !== originalLogoRef.current) {
+        finalLogoUri = await saveTeamLogo(logoUri, team.id);
+      }
+      
+      const updatedTeam = { ...team, players, logoUri: finalLogoUri };
       await saveTeam(updatedTeam);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       navigation.goBack();
